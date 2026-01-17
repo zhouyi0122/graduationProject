@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --- 全局样式 & Element Plus 覆盖 --- */
+
+/* 应用 Noto Sans SC 字体 */
+body {
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+/* --- 淘宝橙色主题下的组件优化 --- */
+
+/* 表单标签文字颜色 */
+.el-form-item__label {
+  color: #4b5563 !important; /* 深灰色 */
+  font-weight: 500 !important;
+}
+
+/* 输入框样式优化 */
+.el-input__wrapper {
+  border-radius: 8px !important;
+  transition: all 0.2s ease-in-out !important;
+  background-color: #f9fafb !important; /* 非常浅的灰色背景 */
+  box-shadow: none !important; /* 移除默认阴影 */
+  border: 1px solid #e5e7eb !important; /* 浅灰色边框 */
+}
+
+.el-input__inner {
+    color: #111827 !important; /* 深黑色文字 */
+}
+
+/* 输入框占位符颜色 */
+.el-input__inner::placeholder {
+  color: #9ca3af !important;
+}
+
+.el-input__wrapper.is-focus {
+  border-color: #f97316 !important; /* 淘宝橙 */
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2) !important; /* 柔和的橙色辉光 */
+}
+
+/* 按钮样式优化 */
+.el-button {
+  border-radius: 8px !important;
+  height: 42px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+/* 主按钮 (淘宝橙) */
+.el-button--primary {
+  --el-button-bg-color: #f97316 !important; /* 淘宝橙 (orange-500) */
+  --el-button-border-color: #f97316 !important;
+  --el-button-hover-bg-color: #ea580c !important; /* 更深的橙色 (orange-600) */
+  --el-button-hover-border-color: #ea580c !important;
+  color: #ffffff !important;
+}
+
+/* 次要按钮 */
+.el-button:not(.el-button--primary) {
+  background-color: #ffffff !important;
+  color: #374151 !important; /* 深灰色文字 */
+  border-color: #d1d5db !important; /* 浅灰色边框 */
+}
+
+.el-button:not(.el-button--primary):hover {
+  background-color: #f9fafb !important; /* 悬浮时浅灰色背景 */
+  border-color: #9ca3af !important;
+}
