@@ -1,0 +1,152 @@
+import { createRouter, createWebHistory } from 'vue-router';
+import { useAuthStore } from '../stores/auth.store';
+
+const routes = [
+    {
+        path: '/',
+        name: 'Home',
+        component: () => import('../views/Home.vue')
+    },
+    {
+        path: '/login',
+        name: 'Login',
+        component: () => import('../views/Login.vue') // 懒加载
+    },
+    {
+        path: '/register',
+        name: 'Register',
+        component: () => import('../views/Register.vue') // 懒加载
+    },
+    {
+        path: '/products/new',
+        name: 'ProductCreate',
+        component: () => import('../views/ProductCreate.vue')
+    },
+    {
+        path: '/product/:id',
+        name: 'ProductDetail',
+        component: () => import('../views/ProductDetail.vue')
+    },
+    {
+        path: '/products',
+        name: 'ProductList',
+        component: () => import('../views/ProductList.vue')
+    },
+    {
+        path: '/user',
+        name: 'UserPage',
+        component: () => import('../views/UserPage.vue')
+    },
+    {
+        path: '/user/products',
+        name: 'MyProducts',
+        component: () => import('../views/user/MyProducts.vue')
+    },
+    {
+        path: '/user/favorites',
+        name: 'MyFavorites',
+        component: () => import('../views/user/MyFavorites.vue')
+    },
+    {
+        path: '/user/orders',
+        name: 'MyOrders',
+        component: () => import('../views/user/MyOrders.vue')
+    },
+    {
+        path: '/user/order/:id',
+        name: 'OrderDetail',
+        component: () => import('../views/user/OrderDetail.vue')
+    },
+    {
+        path: '/user/order/:id/review',
+        name: 'OrderReview',
+        component: () => import('../views/user/OrderReview.vue')
+    },
+    {
+        path: '/user/profile',
+        name: 'Profile',
+        component: () => import('../views/user/Profile.vue')
+    },
+    {
+        path: '/chat',
+        component: () => import('../layouts/ChatLayout.vue'),
+        children: [
+            {
+                path: ':id',
+                name: 'ChatWindow',
+                components: {
+                    // 'default' view is implicitly the main one in the parent
+                    messageList: () => import('../views/chat/MessageList.vue'),
+                    chatWindow: () => import('../views/chat/ChatWindow.vue')
+                }
+            },
+            {
+                path: '',
+                name: 'ChatHome',
+                components: {
+                    messageList: () => import('../views/chat/MessageList.vue'),
+                    // Optional: a placeholder for when no chat is selected
+                    // chatWindow: () => import('../views/chat/SelectAChat.vue')
+                }
+            }
+        ]
+    },
+    {
+        path: '/admin',
+        component: () => import('../layouts/AdminLayout.vue'),
+        // TODO: Add admin role check in router guard
+        children: [
+            {
+                path: '',
+                name: 'Admin',
+                redirect: '/admin/dashboard'
+            },
+            {
+                path: 'dashboard',
+                name: 'Dashboard',
+                component: () => import('../views/admin/Dashboard.vue')
+            },
+            {
+                path: 'users',
+                name: 'UserManagement',
+                component: () => import('../views/admin/UserManagement.vue')
+            },
+            {
+                path: 'products',
+                name: 'ProductManagement',
+                component: () => import('../views/admin/ProductManagement.vue')
+            },
+            {
+                path: 'categories',
+                name: 'CategoryManagement',
+                component: () => import('../views/admin/CategoryManagement.vue')
+            },
+            {
+                path: 'orders',
+                name: 'OrderManagement',
+                component: () => import('../views/admin/OrderManagement.vue')
+            }
+        ]
+    }
+];
+
+const router = createRouter({
+    history: createWebHistory(),
+    routes,
+});
+
+// 全局前置守卫
+router.beforeEach((to, from, next) => {
+    const publicPages = ['/login', '/register'];
+    const authRequired = !publicPages.includes(to.path);
+    const auth = useAuthStore();
+
+    if (authRequired && !auth.isLoggedIn) {
+        // 如果访问的是需要认证的页面，但用户未登录，则重定向到登录页
+        return next('/login');
+    } 
+
+    next();
+});
+
+export default router;

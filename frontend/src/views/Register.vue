@@ -1,86 +1,86 @@
 <template>
-  <div class="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-    <div class="sm:mx-auto sm:w-full sm:max-w-md">
-      <h2 class="mt-6 text-center text-3xl font-bold text-gray-900">
-        校园二手交易平台
-      </h2>
-      <p class="mt-2 text-center text-sm text-gray-600">
-        创建一个新账户
-      </p>
-    </div>
-
-    <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-      <div class="bg-white py-8 px-4 shadow-md sm:rounded-lg sm:px-10">
-        <el-form :model="form" label-position="top" class="space-y-6">
-          <el-form-item label="用户名">
-            <el-input v-model="form.username" placeholder="请输入用户名" size="large"></el-input>
-          </el-form-item>
-
-          <el-form-item label="密码">
-            <el-input v-model="form.password" type="password" placeholder="请输入密码" show-password size="large"></el-input>
-          </el-form-item>
-
-          <div class="pt-4">
-            <el-button type="primary" @click="handleRegister" class="w-full" size="large">注 册</el-button>
-          </div>
-        </el-form>
-
-        <div class="mt-6">
-          <div class="relative">
-            <div class="absolute inset-0 flex items-center">
-              <div class="w-full border-t border-gray-300"></div>
-            </div>
-            <div class="relative flex justify-center text-sm">
-              <span class="px-2 bg-white text-gray-500">已经有账户了？</span>
-            </div>
-          </div>
-
-          <div class="mt-6">
-            <el-button @click="goToLogin" class="w-full" size="large">直接登录</el-button>
-          </div>
-        </div>
+  <div class="register-page bg-white min-h-screen flex flex-col">
+    <!-- Top Header -->
+    <header class="sticky top-0 z-40 bg-white flex-shrink-0">
+      <div class="container mx-auto px-2 py-2 flex items-center relative h-14">
+        <button @click="router.back()" class="absolute left-2 p-2 text-gray-600 hover:text-gray-900">
+          <el-icon :size="20"><ArrowLeftBold /></el-icon>
+        </button>
       </div>
-    </div>
+    </header>
+
+    <main class="flex-grow flex flex-col justify-center">
+        <div class="p-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-2">创建您的账户</h2>
+            <p class="text-gray-500 mb-8">加入校园闲置，开始您的交易之旅</p>
+
+            <el-form :model="form" label-position="top" class="space-y-6">
+                <el-form-item label="用户名">
+                <el-input v-model="form.username" placeholder="请输入用户名" size="large"></el-input>
+                </el-form-item>
+
+                <el-form-item label="邮箱">
+                <el-input v-model="form.email" placeholder="请输入邮箱" size="large"></el-input>
+                </el-form-item>
+
+                <el-form-item label="密码">
+                <el-input v-model="form.password" type="password" placeholder="请输入密码" show-password size="large"></el-input>
+                </el-form-item>
+
+                <el-form-item class="pt-4">
+                <el-button type="primary" @click="handleRegister" class="w-full" size="large" :loading="loading">注册</el-button>
+                </el-form-item>
+            </el-form>
+        </div>
+    </main>
+
+    <footer class="p-8 text-center text-sm text-gray-500 flex-shrink-0">
+        已有账户？ <router-link to="/login" class="font-semibold text-orange-500 hover:underline">立即登录</router-link>
+    </footer>
   </div>
 </template>
 
 <script setup>
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import AuthService from '../services/auth.service';
+import { useAuthStore } from '../stores/auth.store';
 import { ElMessage } from 'element-plus';
+import { ArrowLeftBold } from '@element-plus/icons-vue';
 
-// 表单数据
+const router = useRouter();
+const authStore = useAuthStore();
+const loading = ref(false);
+
 const form = reactive({
   username: '',
+  email: '',
   password: '',
 });
 
-const router = useRouter();
-
-// 处理注册逻辑
 const handleRegister = () => {
-  if (!form.username || !form.password) {
-    ElMessage.error('用户名和密码不能为空！');
+  if (!form.username || !form.email || !form.password) {
+    ElMessage.warning('请填写所有字段');
     return;
   }
-  AuthService.register(form)
-    .then(response => {
-      console.log(response.data);
-      ElMessage.success('注册成功！即将跳转到登录页面...');
-      setTimeout(() => {
-        router.push('/login');
-      }, 1500);
+  // Basic email validation
+  if (!/\S+@\S+\.\S+/.test(form.email)) {
+      ElMessage.warning('请输入有效的邮箱地址');
+      return;
+  }
+
+  loading.value = true;
+  authStore.register(form)
+    .then(() => {
+      ElMessage.success('注册成功！');
+      router.push('/login');
     })
     .catch(error => {
-      console.error(error);
+      console.error('注册失败:', error);
       const errMsg = error.response?.data?.message || '注册失败，请稍后再试。';
       ElMessage.error(errMsg);
+    })
+    .finally(() => {
+      loading.value = false;
     });
-};
-
-// 跳转到登录页面
-const goToLogin = () => {
-  router.push('/login');
 };
 </script>

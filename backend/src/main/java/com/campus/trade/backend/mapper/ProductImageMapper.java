@@ -11,3 +11,14 @@ import org.apache.ibatis.annotations.Mapper;
 public interface ProductImageMapper extends BaseMapper<ProductImage> {
 }
 
+
+
+
+
+
+
+
+
+
+
+

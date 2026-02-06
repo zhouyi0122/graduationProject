@@ -30,3 +30,14 @@ public class ProductDTO {
     // 图片URL列表等其他信息可以在后续迭代中添加
 }
 
+
+
+
+
+
+
+
+
+
+
+

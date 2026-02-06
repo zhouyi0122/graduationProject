@@ -1,38 +1,42 @@
 <template>
-  <div id="app">
-    <header class="bg-white shadow-sm" v-if="authStore.isLoggedIn">
-      <nav class="container mx-auto px-4 py-3 flex justify-between items-center">
-        <div class="text-lg font-bold text-gray-800">校园二手平台</div>
-        <div>
-          <span class="mr-4">欢迎, {{ authStore.user?.username }}</span>
-          <el-button @click="handleLogout" type="danger" size="small">退出登录</el-button>
-        </div>
-      </nav>
-    </header>
+  <el-config-provider :locale="zhCn">
+    <div id="app" class="bg-gray-100 font-sans">
+      <!-- 主内容区域 -->
+      <!-- 根据是否显示底部导航栏，动态调整padding-bottom -->
+      <main :class="{ 'pb-20': showBottomNav }">
+        <router-view />
+      </main>
 
-    <main>
-      <router-view />
-    </main>
-  </div>
+      <!-- 底部导航栏 -->
+      <BottomNav v-if="showBottomNav" />
+    </div>
+  </el-config-provider>
 </template>
 
 <script setup>
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { useAuthStore } from './stores/auth.store';
-import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import BottomNav from './components/BottomNav.vue';
+
+// 引入中文语言包
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs';
 
 const authStore = useAuthStore();
-const router = useRouter();
+const route = useRoute();
 
-const handleLogout = () => {
-  authStore.logout();
-  ElMessage.success('您已成功退出登录。');
-  router.push('/login');
-};
+// 计算是否应该显示底部导航栏
+const showBottomNav = computed(() => {
+  if (!authStore.isLoggedIn) return false;
+  // 定义需要显示底部导航栏的一级页面路径
+  const mainPages = ['/', '/chat', '/user'];
+  return mainPages.includes(route.path);
+});
+
 </script>
 
 <style>
-/* 我们可以在这里保留一些全局样式，或者将其移动到 style.css */
+/* 全局样式 */
 body {
   margin: 0;
 }

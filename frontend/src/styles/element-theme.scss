@@ -1,0 +1,13 @@
+// 1. 导入基础变量，但不立即输出CSS
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  // 2. 覆盖主色调变量
+  $colors: (
+    'primary': (
+      // 将 'base' 颜色设置为 Tailwind CSS 的 orange-500
+      'base': #f97316,
+    ),
+  )
+);
+
+// 3. 导入 Element Plus 的其余样式，此时会使用我们覆盖后的新变量
+@use "element-plus/theme-chalk/src/index.scss" as *;

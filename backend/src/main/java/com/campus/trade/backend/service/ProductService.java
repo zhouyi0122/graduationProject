@@ -17,3 +17,14 @@ public interface ProductService extends IService<Product> {
     Product createProduct(ProductDTO productDTO);
 }
 
+
+
+
+
+
+
+
+
+
+
+
