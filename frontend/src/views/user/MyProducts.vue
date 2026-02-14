@@ -12,26 +12,66 @@
     </header>
 
     <div class="p-4">
-        <el-tabs v-model="activeTab" class="custom-tabs" stretch>
+        <el-tabs v-model="activeTab" class="custom-tabs" stretch v-loading="loading">
           <el-tab-pane label="在卖" name="on_sale">
             <div v-if="onSaleProducts.length > 0" class="space-y-4">
               <div v-for="product in onSaleProducts" :key="product.id" 
                    class="bg-white rounded-lg shadow-sm p-3 flex space-x-3 cursor-pointer"
                    @click="viewProductDetail(product.id)">
-                <img :src="product.imageUrl" :alt="product.title" class="w-24 h-24 rounded-md object-cover flex-shrink-0" />
+                <img :src="product.imageUrl || `https://picsum.photos/200/200?random=${product.id}`" :alt="product.title" class="w-24 h-24 rounded-md object-cover flex-shrink-0" />
+                <div class="flex flex-col justify-between flex-grow min-w-0">
+                    <div>
+                        <p class="text-sm text-gray-800 line-clamp-2 font-semibold">{{ product.title }}</p>
+                        <p class="text-lg font-bold text-red-500 mt-1">¥{{ product.price }}</p>
+                    </div>
+                    <div class="text-right">
+                        <el-button size="small" plain @click.stop="editProduct(product.id)">编辑</el-button>
+                        <el-button size="small" type="danger" plain @click.stop="handleUpdateStatus(product.id, 2, '下架')">下架</el-button>
+                    </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无在卖商品"></el-empty>
+          </el-tab-pane>
+
+          <el-tab-pane label="已售出" name="sold">
+            <div v-if="soldProducts.length > 0" class="space-y-4">
+              <div v-for="product in soldProducts" :key="product.id" 
+                   class="bg-white rounded-lg shadow-sm p-3 flex space-x-3 opacity-80">
+                <img :src="product.imageUrl || `https://picsum.photos/200/200?random=${product.id}`" :alt="product.title" class="w-24 h-24 rounded-md object-cover flex-shrink-0" />
+                <div class="flex flex-col justify-between flex-grow min-w-0">
+                    <div>
+                        <p class="text-sm text-gray-800 line-clamp-2 font-semibold">{{ product.title }}</p>
+                        <p class="text-lg font-bold text-gray-500 mt-1">¥{{ product.price }}</p>
+                    </div>
+                    <div class="flex justify-between items-center mt-2">
+                        <el-tag type="info" size="small">已售出</el-tag>
+                        <el-button size="small" type="danger" plain @click.stop="handleDelete(product.id)">删除记录</el-button>
+                    </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无售出商品"></el-empty>
+          </el-tab-pane>
+
+          <el-tab-pane label="已下架" name="delisted">
+            <div v-if="delistedProducts.length > 0" class="space-y-4">
+              <div v-for="product in delistedProducts" :key="product.id" 
+                   class="bg-white rounded-lg shadow-sm p-3 flex space-x-3 opacity-70">
+                <img :src="product.imageUrl || `https://picsum.photos/200/200?random=${product.id}`" :alt="product.title" class="w-24 h-24 rounded-md object-cover flex-shrink-0" />
                 <div class="flex flex-col justify-between flex-grow min-w-0">
                     <div>
                         <p class="text-sm text-gray-800 line-clamp-2">{{ product.title }}</p>
                         <p class="text-lg font-bold text-red-500 mt-1">¥{{ product.price }}</p>
                     </div>
                     <div class="text-right">
-                        <el-button size="small" plain @click.stop="editProduct(product.id)">编辑</el-button>
-                        <el-button size="small" type="danger" plain @click.stop="handleDelist(product.id)">下架</el-button>
+                        <el-button size="small" type="success" plain @click.stop="handleUpdateStatus(product.id, 0, '重新上架')">重新上架</el-button>
+                        <el-button size="small" type="danger" plain @click.stop="handleDelete(product.id)">删除记录</el-button>
                     </div>
                 </div>
               </div>
             </div>
-            <el-empty v-else description="暂无在卖商品"></el-empty>
+            <el-empty v-else description="暂无已下架商品"></el-empty>
           </el-tab-pane>
 
           <el-tab-pane label="草稿箱" name="drafts">
@@ -52,24 +92,6 @@
             </div>
             <el-empty v-else description="草稿箱是空的"></el-empty>
           </el-tab-pane>
-
-          <el-tab-pane label="已下架" name="delisted">
-            <div v-if="delistedProducts.length > 0" class="space-y-4">
-              <div v-for="product in delistedProducts" :key="product.id" class="bg-white rounded-lg shadow-sm p-3 flex space-x-3 opacity-70">
-                <img :src="product.imageUrl" :alt="product.title" class="w-24 h-24 rounded-md object-cover flex-shrink-0" />
-                <div class="flex flex-col justify-between flex-grow min-w-0">
-                    <div>
-                        <p class="text-sm text-gray-800 line-clamp-2">{{ product.title }}</p>
-                        <p class="text-lg font-bold text-red-500 mt-1">¥{{ product.price }}</p>
-                    </div>
-                    <div class="text-right">
-                        <el-button size="small" type="danger" plain @click.stop="handleDelete(product.id)">删除记录</el-button>
-                    </div>
-                </div>
-              </div>
-            </div>
-            <el-empty v-else description="暂无已下架商品"></el-empty>
-          </el-tab-pane>
         </el-tabs>
     </div>
   </div>
@@ -86,15 +108,29 @@ const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 const activeTab = ref('on_sale');
+const loading = ref(false);
 
-const onSaleProducts = computed(() => userStore.myProducts.filter(p => p.status === 'published'));
+const onSaleProducts = computed(() => userStore.myProducts.filter(p => p.status === 0));
+const soldProducts = computed(() => userStore.myProducts.filter(p => p.status === 1));
+const delistedProducts = computed(() => userStore.myProducts.filter(p => p.status === 2));
 const draftProducts = computed(() => userStore.drafts);
-const delistedProducts = computed(() => userStore.myProducts.filter(p => p.status === 'delisted'));
+
+const loadMyProducts = async () => {
+  loading.value = true;
+  try {
+    await userStore.fetchMyProducts();
+  } catch (error) {
+    ElMessage.error('加载列表失败');
+  } finally {
+    loading.value = false;
+  }
+};
 
 onMounted(() => {
   if (route.query.tab === 'drafts') {
     activeTab.value = 'drafts';
   }
+  loadMyProducts();
 });
 
 const viewProductDetail = (productId) => {
@@ -105,20 +141,40 @@ const editProduct = (productId) => {
     router.push(`/product/edit/${productId}`);
 }
 
-const handleDelist = (productId) => {
-    ElMessageBox.confirm('确定要下架该商品吗？', '提示', { type: 'warning' })
-    .then(() => {
-        userStore.delistProduct(productId);
-        ElMessage.success('已下架');
+const handleUpdateStatus = (productId, status, actionText) => {
+    ElMessageBox.confirm(`确定要${actionText}该商品吗？`, '提示', { 
+      type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
+    })
+    .then(async () => {
+        try {
+          await userStore.updateMyProductStatus(productId, status);
+          ElMessage.success(`商品已${actionText}`);
+        } catch (error) {
+          ElMessage.error('操作失败');
+        }
     }).catch(() => {});
 }
 
 const handleDelete = (productId, isDraft = false) => {
     const message = isDraft ? '确定要删除该草稿吗？' : '删除后不可恢复，确定要删除该记录吗？';
-    ElMessageBox.confirm(message, '提示', { type: 'warning' })
-    .then(() => {
-        userStore.deleteProduct(productId, isDraft);
-        ElMessage.success('已删除');
+    ElMessageBox.confirm(message, '提示', { 
+      type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
+    })
+    .then(async () => {
+        try {
+          if (isDraft) {
+            userStore.deleteProduct(productId, true);
+          } else {
+            await userStore.deleteMyProduct(productId);
+          }
+          ElMessage.success('已删除');
+        } catch (error) {
+          ElMessage.error('删除失败');
+        }
     }).catch(() => {});
 }
 

@@ -6,12 +6,12 @@
         <button @click="router.back()" class="absolute left-2 p-2 text-gray-600 hover:text-gray-900">
           <el-icon :size="20"><ArrowLeftBold /></el-icon>
         </button>
-        <h1 class="text-lg font-semibold text-gray-800 text-center w-full">发布您的闲置宝贝</h1>
+        <h1 class="text-lg font-semibold text-gray-800 text-center w-full">{{ isEditMode ? '编辑您的闲置宝贝' : '发布您的闲置宝贝' }}</h1>
       </div>
     </header>
 
     <div class="p-4">
-        <el-card class="max-w-2xl mx-auto">
+        <el-card class="max-w-2xl mx-auto" v-loading="loading">
           <el-form :model="form" label-position="top" class="space-y-6">
             
             <div>
@@ -49,7 +49,7 @@
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <label class="el-form-item__label" style="margin-bottom: 0;">商品描述</label>
-                        <button class="flex items-center text-sm bg-orange-100 text-orange-600 font-semibold px-2 py-1 rounded-md transition-colors hover:bg-orange-200">
+                        <button type="button" class="flex items-center text-sm bg-orange-100 text-orange-600 font-semibold px-2 py-1 rounded-md transition-colors hover:bg-orange-200">
                             <el-icon class="mr-1" :size="16"><MagicStick /></el-icon>
                             AI帮你写
                         </button>
@@ -74,42 +74,77 @@
 
             <div class="pt-4 flex space-x-4">
               <el-button @click="handleSaveDraft" class="w-1/2" size="large">存为草稿</el-button>
-              <el-button type="primary" @click="handleSubmit" class="w-1/2" size="large" :loading="loading">确认发布</el-button>
+              <el-button type="primary" @click="handleSubmit" class="w-1/2" size="large" :loading="loading">
+                {{ isEditMode ? '确认修改' : '确认发布' }}
+              </el-button>
             </div>
           </el-form>
         </el-card>
     </div>
 
     <el-dialog v-model="dialogVisible">
-      <img w-full :src="dialogImageUrl" alt="Preview Image" />
+      <img class="w-full" :src="dialogImageUrl" alt="Preview Image" />
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue';
-import { useRouter, onBeforeRouteLeave } from 'vue-router';
+import { reactive, ref, computed, onMounted } from 'vue';
+import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router';
 import { useUserStore } from '../stores/user.store';
+import { useProductStore } from '../stores/product.store';
+import apiClient from '../services/api';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, MagicStick, ArrowLeftBold } from '@element-plus/icons-vue';
 
 const router = useRouter();
+const route = useRoute();
 const userStore = useUserStore();
+const productStore = useProductStore();
+
 const loading = ref(false);
-let isNavigating = false; // Flag to prevent multiple dialogs
+const isEditMode = computed(() => !!route.params.id);
+let isNavigating = false;
 
 const form = reactive({
   title: '',
   description: '',
   price: 0.00,
   condition: '',
+  categoryId: 1,
 });
 
 const fileList = ref([]);
 const dialogImageUrl = ref('');
 const dialogVisible = ref(false);
 
-// Computed property to check if the form is empty
+const fetchProductData = async () => {
+  if (!isEditMode.value) return;
+  
+  loading.value = true;
+  try {
+    const data = await productStore.fetchProductById(route.params.id);
+    form.title = data.title;
+    form.description = data.description;
+    form.price = data.price;
+    form.condition = data.condition;
+    form.categoryId = data.categoryId || 1;
+    
+    if (data.imageUrl) {
+      fileList.value = [{ url: data.imageUrl, name: 'current_image' }];
+    }
+  } catch (error) {
+    console.error('获取商品详情失败:', error);
+    ElMessage.error('无法加载商品数据');
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchProductData();
+});
+
 const isFormEmpty = computed(() => {
     return !form.title.trim() && !form.description.trim() && !form.condition && fileList.value.length === 0;
 });
@@ -119,7 +154,6 @@ const handlePictureCardPreview = (uploadFile) => {
   dialogVisible.value = true;
 };
 
-// Logic to save draft
 const handleSaveDraft = () => {
     if (isFormEmpty.value) {
         ElMessage.warning('草稿内容不能为空！');
@@ -128,30 +162,42 @@ const handleSaveDraft = () => {
     const draftData = { ...form, images: fileList.value.map(f => f.url) };
     userStore.saveDraft(draftData);
     ElMessage.success('草稿已保存！');
-    isNavigating = true; // Allow navigation after saving
+    isNavigating = true;
     router.push('/user/products?tab=drafts');
 }
 
-// Logic to submit product
-const handleSubmit = () => {
-  if (!form.title || !form.price || !form.condition || fileList.value.length === 0) {
+const handleSubmit = async () => {
+  if (!form.title || !form.price || !form.condition || (fileList.value.length === 0 && !isEditMode.value)) {
     ElMessage.error('图片、标题、新旧程度和价格不能为空！');
     return;
   }
   loading.value = true;
-  const productData = { ...form, images: fileList.value.map(f => f.url) };
   
-  // Simulating an API call
-  setTimeout(() => {
-      userStore.publishProduct(productData);
+  try {
+    const productData = { 
+      ...form, 
+      images: fileList.value.map(f => f.url || f.response?.url) 
+    };
+    
+    if (isEditMode.value) {
+      await apiClient.put(`/products/${route.params.id}`, productData);
+      ElMessage.success('商品更新成功！');
+    } else {
+      await apiClient.post('/products', productData);
       ElMessage.success('商品发布成功！');
-      isNavigating = true; // Allow navigation after successful submission
-      router.push('/user/products');
-      loading.value = false;
-  }, 1000);
+    }
+    
+    isNavigating = true;
+    await productStore.fetchProducts();
+    router.push('/user/products');
+  } catch (error) {
+    console.error('操作失败:', error);
+    ElMessage.error(isEditMode.value ? '更新失败' : '发布失败');
+  } finally {
+    loading.value = false;
+  }
 };
 
-// Navigation guard
 onBeforeRouteLeave((to, from, next) => {
   if (!isFormEmpty.value && !isNavigating) {
     ElMessageBox.confirm(
@@ -166,27 +212,24 @@ onBeforeRouteLeave((to, from, next) => {
     )
       .then(() => {
         handleSaveDraft();
-        // Navigation will be handled inside handleSaveDraft, so we don't call next() here.
       })
       .catch((action) => {
         if (action === 'cancel') {
-          next(); // Allow navigation
+          next();
         } else {
-          next(false); // Stay on the page
+          next(false);
         }
       });
   } else {
-    next(); // Allow navigation
+    next();
   }
 });
-
 </script>
 
 <style scoped>
 :deep(.el-select__wrapper.is-focused) {
     box-shadow: 0 0 0 1px #f97316 inset !important;
 }
-
 :deep(.el-textarea__inner:focus) {
     box-shadow: 0 0 0 1px #f97316 inset !important;
 }

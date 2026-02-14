@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useProductStore } from '../stores/product.store';
 import ProductCard from '../components/ProductCard.vue';
@@ -38,6 +38,10 @@ import { Search } from '@element-plus/icons-vue';
 const productStore = useProductStore();
 const router = useRouter();
 const searchQuery = ref('');
+
+onMounted(() => {
+  productStore.fetchProducts();
+});
 
 const handleSearch = () => {
   if (searchQuery.value.trim()) {

@@ -17,6 +17,7 @@ public class Order {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    @TableField("order_no")
     private String orderNumber;
 
     private Long buyerId;
@@ -27,7 +28,12 @@ public class Order {
 
     private Integer status; // 0:待付款, 1:待发货, 2:待收货, 3:待评价, 4:已完成, 5:退款中, 6:已取消
 
+    @TableField("order_price")
     private BigDecimal totalPrice;
+
+    private String shippingName;
+
+    private String shippingPhone;
 
     private String shippingAddress;
 
@@ -39,4 +45,21 @@ public class Order {
     private Date shipTime;
 
     private Date completeTime;
+
+    private Date cancelTime;
+
+    @TableField(exist = false)
+    private String productTitle;
+
+    @TableField(exist = false)
+    private String imageUrl;
+
+    @TableField(exist = false)
+    private String buyerNickname;
+
+    @TableField(exist = false)
+    private String sellerNickname;
+
+    @TableField(exist = false)
+    private Integer disputeInProgress;
 }

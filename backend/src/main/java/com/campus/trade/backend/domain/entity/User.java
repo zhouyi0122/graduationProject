@@ -28,12 +28,18 @@ public class User {
 
     private String email;
 
+    private String gender;
+
+    private String bio;
+
     private Integer status = 0; // 0:正常, 1:禁用
 
     private Integer role = 0; // 0:普通用户, 1:管理员
 
     @TableField("is_certified")
     private Integer isCertified = 0; // 0:未认证, 1:已认证
+
+    private java.math.BigDecimal balance = java.math.BigDecimal.ZERO;
 
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     private Date createTime;

@@ -32,6 +32,7 @@ public class AuthController {
         User user = new User();
         user.setUsername(registerRequest.getUsername());
         user.setPassword(registerRequest.getPassword());
+        user.setEmail(registerRequest.getEmail());
         userService.register(user);
         return new MessageResponse("注册成功！");
     }

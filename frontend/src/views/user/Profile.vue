@@ -7,9 +7,6 @@
             <el-icon @click="router.back()" :size="20" class="cursor-pointer"><ArrowLeftBold /></el-icon>
         </div>
         <h1 class="text-lg font-semibold">编辑资料</h1>
-        <div class="absolute right-4">
-            <el-button type="primary" text @click="saveProfile">保存</el-button>
-        </div>
       </div>
     </header>
 
@@ -19,7 +16,7 @@
         <div @click="triggerAvatarUpload" class="flex items-center justify-between py-2 cursor-pointer">
           <span>头像</span>
           <div class="flex items-center">
-            <el-avatar :size="48" :src="form.avatarUrl || 'https://i.pravatar.cc/150?u=a042581f4e29026704d'" />
+            <el-avatar :size="48" :src="form.avatarUrl || `https://picsum.photos/150/150?random=${userStore.profile.id}`" />
             <el-icon class="ml-2 text-gray-400"><ArrowRightBold /></el-icon>
           </div>
           <input type="file" ref="avatarInput" @change="handleAvatarChange" accept="image/*" class="hidden" />
@@ -86,13 +83,13 @@
     </el-dialog>
 
     <el-dialog v-model="genderDialogVisible" title="选择性别" width="90%">
-        <el-radio-group v-model="form.gender">
+        <el-radio-group v-model="form.gender" @change="handleGenderChange">
             <el-radio label="男">男</el-radio>
             <el-radio label="女">女</el-radio>
             <el-radio label="保密">保密</el-radio>
         </el-radio-group>
         <template #footer>
-            <el-button @click="genderDialogVisible = false">完成</el-button>
+            <el-button @click="genderDialogVisible = false">取消</el-button>
         </template>
     </el-dialog>
 
@@ -137,6 +134,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '../../stores/user.store';
 import { useAuthStore } from '../../stores/auth.store';
+import apiClient from '../../services/api';
 import { ArrowLeftBold, ArrowRightBold, Share, MoreFilled, SuccessFilled } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -176,25 +174,62 @@ const editField = reactive({
     type: 'text',
 });
 
-onMounted(() => {
-    form.nickname = userStore.profile.nickname;
-    form.bio = userStore.profile.bio;
-    form.gender = userStore.profile.gender;
-    form.avatarUrl = userStore.profile.avatarUrl;
+onMounted(async () => {
+    try {
+        const data = await userStore.fetchProfile();
+        form.nickname = data.nickname || '';
+        form.bio = data.bio || '';
+        form.gender = data.gender || '保密';
+        form.avatarUrl = data.avatar || '';
+    } catch (error) {
+        console.error('获取个人资料失败:', error);
+    }
 });
 
 const triggerAvatarUpload = () => {
     avatarInput.value.click();
 }
 
-const handleAvatarChange = (event) => {
+const handleAvatarChange = async (event) => {
     const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            form.avatarUrl = e.target.result;
-        };
-        reader.readAsDataURL(file);
+    if (!file) return;
+
+    // 1. 限制文件大小和类型
+    if (!file.type.startsWith('image/')) {
+        ElMessage.error('请选择图片文件');
+        return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+        ElMessage.error('图片大小不能超过 2MB');
+        return;
+    }
+
+    // 2. 准备上传数据
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        ElMessage.info('头像上传中...');
+        // 3. 调用真实上传接口
+        const response = await apiClient.post('/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        const newAvatarUrl = response.data.url;
+        
+        // 4. 立即更新到数据库
+        await userStore.updateUserProfile({ 
+            nickname: form.nickname,
+            bio: form.bio,
+            gender: form.gender,
+            avatar: newAvatarUrl
+        });
+        
+        form.avatarUrl = newAvatarUrl;
+        ElMessage.success('头像更换成功');
+    } catch (error) {
+        console.error('头像上传失败:', error);
+        ElMessage.error('上传失败，请稍后再试');
     }
 }
 
@@ -213,41 +248,77 @@ const openEditDialog = (field) => {
     editDialogVisible.value = true;
 }
 
-const saveEdit = () => {
+const saveEdit = async () => {
+    const oldValue = form[editField.key];
     form[editField.key] = editField.value;
     editDialogVisible.value = false;
+    
+    try {
+        await userStore.updateUserProfile({ 
+            nickname: form.nickname,
+            bio: form.bio,
+            gender: form.gender,
+            avatar: form.avatarUrl,
+        });
+        ElMessage.success(`${editField.label}修改成功`);
+    } catch (error) {
+        form[editField.key] = oldValue; // 失败回滚
+        ElMessage.error('修改失败，请重试');
+    }
 }
 
-const saveProfile = () => {
-    userStore.updateProfile({ 
-        nickname: form.nickname,
-        bio: form.bio,
-        gender: form.gender,
-        avatarUrl: form.avatarUrl,
-    });
-    ElMessage.success('资料已保存');
-    router.back();
+const handleGenderChange = async (val) => {
+    const oldGender = form.gender;
+    form.gender = val;
+    genderDialogVisible.value = false;
+    try {
+        await userStore.updateUserProfile({ 
+            nickname: form.nickname,
+            bio: form.bio,
+            gender: form.gender,
+            avatar: form.avatarUrl,
+        });
+        ElMessage.success('性别修改成功');
+    } catch (error) {
+        form.gender = oldGender; // 失败回滚
+        ElMessage.error('修改失败');
+    }
 }
 
-const changePassword = () => {
+const changePassword = async () => {
+    if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+        ElMessage.warning('请填写所有密码字段');
+        return;
+    }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
         ElMessage.error('两次输入的新密码不一致');
         return;
     }
-    // Here you would typically call an API to change the password
-    console.log('【模拟修改密码】', passwordForm);
-    ElMessage.success('密码修改成功');
-    passwordDialogVisible.value = false;
+    try {
+        await userStore.changePassword(passwordForm.oldPassword, passwordForm.newPassword);
+        ElMessage.success('密码修改成功，请牢记新密码');
+        passwordDialogVisible.value = false;
+        // 清空表单
+        passwordForm.oldPassword = '';
+        passwordForm.newPassword = '';
+        passwordForm.confirmPassword = '';
+    } catch (error) {
+        ElMessage.error(error.response?.data || '修改失败，请检查旧密码是否正确');
+    }
 }
 
-const submitCertification = () => {
+const submitCertification = async () => {
     if (!certificationForm.studentId || !certificationForm.realName) {
         ElMessage.warning('请填写完整的认证信息');
         return;
     }
-    userStore.certifyCampus(certificationForm);
-    ElMessage.success('认证成功');
-    certificationDialogVisible.value = false;
+    try {
+        await userStore.certifyCampus(certificationForm);
+        ElMessage.success('认证成功');
+        certificationDialogVisible.value = false;
+    } catch (error) {
+        ElMessage.error('认证失败，请稍后再试');
+    }
 }
 
 const handleLogout = () => {

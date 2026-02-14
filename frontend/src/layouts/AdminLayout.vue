@@ -1,6 +1,6 @@
 <template>
   <el-container class="admin-layout-container h-screen">
-    <el-aside width="200px" class="bg-gray-800 text-white flex flex-col">
+    <el-aside width="200px" class="bg-gray-800 text-white flex flex-col shadow-xl">
       <div class="h-16 flex items-center justify-center text-xl font-bold flex-shrink-0">
         后台管理
       </div>

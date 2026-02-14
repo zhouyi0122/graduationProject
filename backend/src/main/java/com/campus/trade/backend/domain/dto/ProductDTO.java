@@ -27,7 +27,9 @@ public class ProductDTO {
     @Positive(message = "价格必须为正数")
     private BigDecimal price;
 
-    // 图片URL列表等其他信息可以在后续迭代中添加
+    private String condition;
+
+    private java.util.List<String> images;
 }
 
 

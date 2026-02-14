@@ -17,19 +17,19 @@
         <div class="flex items-center text-xs text-gray-400 space-x-2">
             <span class="inline-flex items-center">
                 <el-icon :size="14" class="mr-0.5"><View /></el-icon>
-                <span>{{ Math.floor(Math.random() * 1000) }}</span>
+                <span>{{ product.views ?? 0 }}</span>
             </span>
             <span class="inline-flex items-center cursor-pointer hover:text-orange-500" @click.prevent.stop="toggleFavorite">
                 <component :is="isFavorited ? HeartIconSolid : HeartIconOutline" class="h-4 w-4 mr-0.5" :class="{ 'text-orange-500': isFavorited }" />
-                <span>{{ favoriteCount }}</span>
+                <span>{{ product.favoriteCount ?? 0 }}</span>
             </span>
         </div>
       </div>
 
       <!-- Seller Info -->
       <div class="flex items-center border-t border-gray-100 pt-1.5">
-        <img class="h-5 w-5 rounded-full object-cover" :src="product.seller.avatarUrl" alt="seller avatar"/>
-        <p class="ml-1.5 text-xs text-gray-500 truncate">{{ product.seller.nickname }}</p>
+        <img class="h-5 w-5 rounded-full object-cover" :src="product.seller?.avatar || `https://picsum.photos/40?random=${product.id}`" alt="seller avatar"/>
+        <p class="ml-1.5 text-xs text-gray-500 truncate">{{ product.seller?.nickname || '未知卖家' }}</p>
       </div>
     </div>
   </router-link>

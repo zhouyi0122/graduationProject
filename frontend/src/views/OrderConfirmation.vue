@@ -83,6 +83,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useUserStore } from '../stores/user.store';
+import apiClient from '../services/api';
 import { ArrowLeftBold, ArrowRightBold, Location } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -94,13 +95,17 @@ const product = ref(null);
 const shippingInfo = reactive({ name: '', phone: '', address: '' });
 const addressDialogVisible = ref(false);
 const editableAddress = reactive({ name: '', phone: '', address: '' });
+const loading = ref(false);
 
 onMounted(() => {
     try {
         if (route.query.product) {
             product.value = JSON.parse(route.query.product);
-            Object.assign(shippingInfo, userStore.profile.shippingInfo);
-            Object.assign(editableAddress, userStore.profile.shippingInfo);
+            
+            // 优先使用 store 中的地址，如果没有则留空
+            const storeAddress = userStore.profile.shippingInfo || { name: '', phone: '', address: '' };
+            Object.assign(shippingInfo, storeAddress);
+            Object.assign(editableAddress, storeAddress);
         }
     } catch (e) {
         console.error('Failed to parse product data from query:', e);
@@ -108,12 +113,22 @@ onMounted(() => {
 });
 
 const saveAddress = () => {
+    if (!editableAddress.name || !editableAddress.phone || !editableAddress.address) {
+        ElMessage.warning('请填写完整的收货信息');
+        return;
+    }
     Object.assign(shippingInfo, editableAddress);
     addressDialogVisible.value = false;
     ElMessage.success('地址已更新');
 }
 
 const handleConfirmPayment = () => {
+    if (!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address) {
+        ElMessage.warning('请先完善收货地址');
+        addressDialogVisible.value = true;
+        return;
+    }
+
     const price = parseFloat(product.value.price);
     ElMessageBox.confirm(
       `将从您的余额中支付 ¥${price.toFixed(2)}。`, 
@@ -125,32 +140,45 @@ const handleConfirmPayment = () => {
         center: true,
         message: `
           <div class="text-center">
-            <p class="text-gray-500">当前余额: ¥${userStore.profile.balance.toFixed(2)}</p>
+            <p class="text-gray-500">当前余额: ¥${(userStore.profile?.balance || 0).toFixed(2)}</p>
             <p class="text-3xl font-bold my-2">¥${price.toFixed(2)}</p>
           </div>
         `,
         dangerouslyUseHTMLString: true,
       }
-    ).then(() => {
-        if (userStore.deductBalance(price)) {
+    ).then(async () => {
+        loading.value = true;
+        try {
+            const orderPayload = {
+                productId: product.value.id,
+                shippingName: shippingInfo.name,
+                shippingPhone: shippingInfo.phone,
+                shippingAddress: shippingInfo.address
+            };
+
+            const response = await apiClient.post('/orders', orderPayload);
+            const createdOrder = response.data;
+
             ElMessage.success('支付成功！');
-            const newOrderId = userStore.createOrder(product.value, '待发货', shippingInfo);
-            router.replace(`/user/order/${newOrderId}`);
-        } else {
-            ElMessage.error('余额不足，支付失败！');
+            // 下单成功后跳转到订单详情页，带上真实的订单ID
+            router.replace(`/user/order/${createdOrder.id}`);
+        } catch (error) {
+            console.error('下单失败:', error);
+            const errMsg = error.response?.data || '支付失败，请检查余额或登录状态';
+            ElMessage.error(errMsg);
+        } finally {
+            loading.value = false;
         }
     }).catch(() => {});
 };
 
 const handleCancel = () => {
     ElMessageBox.confirm(
-      '确认要取消支付吗？',
+      '确认要取消支付吗？内容将不会被保存。',
       '提示',
       { type: 'warning', confirmButtonText: '确认取消', cancelButtonText: '继续支付' }
     ).then(() => {
-        const newOrderId = userStore.createOrder(product.value, '待付款', shippingInfo);
-        ElMessage.info('订单已创建，请尽快支付');
-        router.replace(`/user/order/${newOrderId}`);
+        router.back();
     }).catch(() => {});
 };
 

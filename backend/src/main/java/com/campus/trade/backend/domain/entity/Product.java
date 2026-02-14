@@ -24,9 +24,27 @@ public class Product {
 
     private String description;
 
+    @TableField(exist = false)
     private BigDecimal originalPrice;
 
     private BigDecimal price;
+
+    @TableField("`condition`")
+    private String condition;
+
+    @TableField(exist = false)
+    private String imageUrl;
+
+    @TableField(exist = false)
+    private User seller;
+
+    private Integer views = 0;
+
+    @TableField(exist = false)
+    private Long favoriteCount = 0L;
+
+    @TableField(exist = false)
+    private Boolean isFavorited = false;
 
     private Integer status = 0; // 0:在售, 1:已售出, 2:下架
 

@@ -37,60 +37,93 @@
     </div>
 
     <!-- Product List -->
-    <div class="container mx-auto p-2 space-y-2">
-        <div v-for="product in productStore.products" :key="product.id" 
-             class="bg-white p-3 rounded-lg shadow-sm flex space-x-4 cursor-pointer h-32"
-             @click="() => handleItemClick(product)">
-            <img :src="product.imageUrl" :alt="product.title" class="w-24 h-24 rounded-md object-cover flex-shrink-0 self-center" />
-            <div class="flex flex-col flex-grow min-w-0 justify-between">
-                                <h3 class="text-lg font-medium text-gray-800 leading-tight line-clamp-2">{{ product.title }}</h3>
-                <div>
-                    <p class="text-lg font-bold text-red-500 mb-1">¥{{ product.price }}</p>
-                    <div class="flex items-center justify-between text-xs text-gray-400">
-                        <span>{{ product.seller.nickname }}</span>
-                        <div class="flex items-center space-x-3">
-                            <span class="inline-flex items-center">
-                                <el-icon :size="14" class="mr-0.5"><View /></el-icon>
-                                <span>{{ Math.floor(Math.random() * 1000) }}</span>
-                            </span>
-                            <FavoriteButton :initialCount="Math.floor(Math.random() * 200)" />
+    <div class="container mx-auto p-2 space-y-2" v-loading="loading">
+        <div v-if="productStore.products.length > 0">
+            <div v-for="product in productStore.products" :key="product.id" 
+                 class="bg-white p-3 rounded-lg shadow-sm flex space-x-4 cursor-pointer h-32"
+                 @click="() => handleItemClick(product)">
+                <img :src="product.imageUrl || `https://picsum.photos/200/200?random=${product.id}`" 
+                     :alt="product.title" class="w-24 h-24 rounded-md object-cover flex-shrink-0 self-center" />
+                <div class="flex flex-col flex-grow min-w-0 justify-between">
+                    <h3 class="text-sm font-bold text-gray-800 leading-tight line-clamp-2">{{ product.title }}</h3>
+                    <div>
+                        <p class="text-lg font-bold text-red-500 mb-1">¥{{ product.price }}</p>
+                        <div class="flex items-center justify-between text-[10px] text-gray-400">
+                            <span class="truncate max-w-[100px]">{{ product.seller?.nickname || '闲置用户' }}</span>
+                            <div class="flex items-center space-x-3">
+                                <span class="inline-flex items-center">
+                                    <el-icon :size="14" class="mr-0.5"><View /></el-icon>
+                                    <span>{{ product.views ?? 0 }}</span>
+                                </span>
+                                <span class="inline-flex items-center">
+                                    <el-icon :size="14" class="mr-0.5"><Star /></el-icon>
+                                    <span>{{ product.favoriteCount ?? 0 }}</span>
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+        <el-empty v-else description="没有找到相关的宝贝哦~" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useProductStore } from '../stores/product.store';
-import { ArrowLeftBold, Search, ArrowUpBold, ArrowDownBold, View } from '@element-plus/icons-vue';
-import FavoriteButton from '../components/FavoriteButton.vue';
+import { ArrowLeftBold, Search, ArrowUpBold, ArrowDownBold, View, Star } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus';
 
 const route = useRoute();
 const router = useRouter();
 const productStore = useProductStore();
 
 const searchQuery = ref('');
+const loading = ref(false);
 const activeSort = ref('comprehensive');
 const priceSortOrder = ref('none'); // 'asc', 'desc', 'none'
 
-const sortOptions = ref([
+const sortOptions = [
     { key: 'comprehensive', label: '综合' },
     { key: 'latest', label: '最新' },
     { key: 'price', label: '价格' },
-    { key: 'credit', label: '收藏' },
-]);
+];
+
+const performSearch = async () => {
+    loading.value = true;
+    try {
+        let sortParam = 'latest'; // 默认最新
+        if (activeSort.value === 'price') {
+            sortParam = priceSortOrder.value === 'asc' ? 'price_asc' : 'price_desc';
+        } else if (activeSort.value === 'comprehensive' || activeSort.value === 'latest') {
+            sortParam = 'latest';
+        }
+        
+        await productStore.fetchProducts(searchQuery.value, sortParam);
+    } catch (error) {
+        console.error('获取商品列表失败:', error);
+        ElMessage.error('获取商品列表失败');
+    } finally {
+        loading.value = false;
+    }
+};
 
 onMounted(() => {
-  searchQuery.value = route.query.q || '';
+    searchQuery.value = route.query.q || '';
+    performSearch();
+});
+
+// 监听路由参数变化
+watch(() => route.query.q, (newQuery) => {
+    searchQuery.value = newQuery || '';
+    performSearch();
 });
 
 const goBack = () => {
-  router.push('/');
+    router.push('/');
 };
 
 const handleItemClick = (product) => {
@@ -98,7 +131,7 @@ const handleItemClick = (product) => {
 }
 
 const handleSearch = () => {
-  console.log('Searching for:', searchQuery.value);
+    router.push({ path: '/products', query: { q: searchQuery.value } });
 };
 
 const selectSort = (key) => {
@@ -113,7 +146,8 @@ const selectSort = (key) => {
         activeSort.value = key;
         priceSortOrder.value = 'none';
     }
-    console.log('Sorting by:', activeSort.value, priceSortOrder.value !== 'none' ? priceSortOrder.value : '');
+    // 切换排序后立即重新查询
+    performSearch();
 }
 
 </script>

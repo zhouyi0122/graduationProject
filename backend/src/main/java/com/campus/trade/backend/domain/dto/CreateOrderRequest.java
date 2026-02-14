@@ -5,4 +5,7 @@ import lombok.Data;
 @Data
 public class CreateOrderRequest {
     private Long productId;
+    private String shippingName;
+    private String shippingPhone;
+    private String shippingAddress;
 }

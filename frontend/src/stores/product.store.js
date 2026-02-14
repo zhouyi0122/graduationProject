@@ -1,36 +1,9 @@
 import { defineStore } from 'pinia';
-
-const generateProducts = (count) => {
-  const products = [];
-  const titles = [
-    '九成新山地自行车', '考研数学全套资料', '罗技G102鼠标', '入门级民谣吉他',
-    '闲置的iPad Air 3', '宿舍用小冰箱', '品牌篮球', '几乎全新的羽毛球拍',
-    '九五新戴尔显示器', '二手电吉他效果器', '宿舍小电锅', '专业网球拍'
-  ];
-  const sellers = [
-    { nickname: '学长小张', avatarUrl: 'https://i.pravatar.cc/40?u=1' },
-    { nickname: '考研上岸的学姐', avatarUrl: 'https://i.pravatar.cc/40?u=2' },
-    { nickname: '电竞爱好者', avatarUrl: 'https://i.pravatar.cc/40?u=3' },
-    { nickname: '文艺青年', avatarUrl: 'https://i.pravatar.cc/40?u=4' },
-  ];
-
-  for (let i = 1; i <= count; i++) {
-    products.push({
-      id: i,
-      title: titles[i % titles.length],
-      description: '这是一个商品的简短描述，用于展示在卡片上。',
-      price: (Math.random() * 300 + 20).toFixed(2),
-      // 使用picsum.photos生成不同尺寸的随机图片
-      imageUrl: `https://picsum.photos/400/${Math.floor(Math.random() * 200) + 300}?random=${i}`,
-      seller: sellers[i % sellers.length]
-    });
-  }
-  return products;
-};
+import apiClient from '../services/api';
 
 export const useProductStore = defineStore('products', {
   state: () => ({
-    products: generateProducts(20), // 生成20个商品数据以便更好地展示瀑布流
+    products: [], 
     categories: [
         { id: 1, name: '电子产品', href: '#' },
         { id: 2, name: '学习书籍', href: '#' },
@@ -45,6 +18,50 @@ export const useProductStore = defineStore('products', {
     }
   },
   actions: {
-    // 后续添加从API获取数据的actions
+    async fetchProducts(query = '', sort = 'latest') {
+      try {
+        let url = `/products?q=${encodeURIComponent(query)}&sort=${sort}`;
+        const response = await apiClient.get(url);
+        this.products = response.data;
+      } catch (error) {
+        console.error('获取商品列表失败:', error);
+      }
+    },
+    // 获取单个商品详情
+    async fetchProductById(id) {
+      try {
+        const response = await apiClient.get(`/products/${id}`);
+        return response.data;
+      } catch (error) {
+        console.error('获取商品详情失败:', error);
+        throw error;
+      }
+    },
+    // 管理员：获取所有商品列表
+    async fetchAllAdminProducts() {
+      try {
+        const response = await apiClient.get('/admin/products');
+        this.products = response.data;
+        return response.data;
+      } catch (error) {
+        console.error('管理员获取商品列表失败:', error);
+        throw error;
+      }
+    },
+    // 管理员：切换商品状态（下架/上架）
+    async adminToggleProductStatus(productId) {
+      try {
+        const response = await apiClient.put(`/admin/products/${productId}/status`);
+        // 同步更新本地列表中的状态
+        const product = this.products.find(p => p.id === productId);
+        if (product) {
+          product.status = response.data.newStatus;
+        }
+        return response.data;
+      } catch (error) {
+        console.error('切换商品状态失败:', error);
+        throw error;
+      }
+    }
   },
 });

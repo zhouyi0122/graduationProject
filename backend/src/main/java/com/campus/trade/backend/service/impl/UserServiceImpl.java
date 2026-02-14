@@ -88,4 +88,65 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 userDetails.getEmail(),
                 roles);
     }
+
+    @Autowired
+    private com.campus.trade.backend.mapper.WalletTransactionMapper walletTransactionMapper;
+
+    @Override
+    public void updateBalance(Long userId, java.math.BigDecimal amount, Integer type, String description) {
+        User user = this.getById(userId);
+        if (user != null) {
+            java.math.BigDecimal currentBalance = user.getBalance() != null ? user.getBalance() : java.math.BigDecimal.ZERO;
+            user.setBalance(currentBalance.add(amount));
+            this.updateById(user);
+
+            // 记录流水
+            com.campus.trade.backend.domain.entity.WalletTransaction tx = new com.campus.trade.backend.domain.entity.WalletTransaction();
+            tx.setUserId(userId);
+            tx.setAmount(amount);
+            tx.setType(type);
+            tx.setDescription(description);
+            walletTransactionMapper.insert(tx);
+        }
+    }
+
+    @Override
+    public void updateProfile(User user) {
+        // 仅更新允许修改的字段：昵称、性别、个人简介、手机号、头像
+        User existingUser = this.getById(user.getId());
+        if (existingUser != null) {
+            existingUser.setNickname(user.getNickname());
+            existingUser.setGender(user.getGender());
+            existingUser.setBio(user.getBio());
+            existingUser.setPhone(user.getPhone());
+            existingUser.setAvatar(user.getAvatar());
+            this.updateById(existingUser);
+        }
+    }
+
+    @Override
+    public void certifyUser(Long userId) {
+        User user = this.getById(userId);
+        if (user != null) {
+            user.setIsCertified(1); // 设置为已认证
+            this.updateById(user);
+        }
+    }
+
+    @Override
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        User user = this.getById(userId);
+        if (user == null) {
+            throw new RuntimeException("用户不存在");
+        }
+
+        // 验证旧密码
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new RuntimeException("旧密码错误");
+        }
+
+        // 设置新密码（加密）
+        user.setPassword(passwordEncoder.encode(newPassword));
+        this.updateById(user);
+    }
 }

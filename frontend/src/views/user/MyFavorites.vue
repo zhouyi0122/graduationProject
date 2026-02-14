@@ -1,210 +1,148 @@
 <template>
-  <div class="my-favorites-page bg-gray-100 min-h-screen" :class="{ 'pb-20': isManaging }">
+  <div class="my-favorites-page bg-gray-100 min-h-screen pb-20">
     <!-- Top Fixed Header -->
     <header class="sticky top-0 z-40 bg-white shadow-sm">
-      <div class="container mx-auto px-4 py-2 flex items-center relative h-14">
-        <button @click="handleBack" class="absolute left-2 p-2 text-gray-600 hover:text-gray-900">
+      <div class="container mx-auto px-2 py-2 flex items-center relative h-14">
+        <button @click="router.back()" class="absolute left-2 p-2 text-gray-600 hover:text-gray-900">
           <el-icon :size="20"><ArrowLeftBold /></el-icon>
         </button>
         <h1 class="text-lg font-semibold text-gray-800 text-center w-full">我的收藏</h1>
-        <button @click="toggleManagement" class="absolute right-2 p-2 text-sm font-semibold" :class="isManaging ? 'text-orange-500' : 'text-gray-600'">
-          {{ isManaging ? '完成' : '管理' }}
+        <button v-if="userStore.favoriteProducts.length > 0" 
+                @click="isEditMode = !isEditMode" 
+                class="absolute right-2 p-2 text-gray-600 font-medium">
+          {{ isEditMode ? '完成' : '管理' }}
         </button>
       </div>
     </header>
 
-    <!-- Filter Tabs -->
-    <div class="bg-white border-b border-gray-200">
-        <el-tabs v-model="activeFilter" class="container mx-auto custom-tabs" stretch>
-          <el-tab-pane label="全部" name="all"></el-tab-pane>
-          <el-tab-pane label="有效宝贝" name="valid"></el-tab-pane>
-          <el-tab-pane label="失效宝贝" name="invalid"></el-tab-pane>
-        </el-tabs>
-    </div>
-
-    <div class="p-4">
-      <div v-if="filteredFavorites.length > 0" class="space-y-3">
-        <div v-for="product in filteredFavorites" :key="product.id" 
-             class="bg-white p-3 rounded-lg shadow-sm flex space-x-4 items-center transition-all cursor-pointer"
-             :class="{ 'opacity-60': product.status === 2, 'pl-12': isManaging }"
-             @click="() => handleItemClick(product)">
+    <div class="p-4" v-loading="loading">
+      <div v-if="userStore.favoriteProducts.length > 0" class="space-y-4">
+        <div v-for="product in userStore.favoriteProducts" :key="product.id" 
+             class="bg-white rounded-xl shadow-sm overflow-hidden flex items-center p-3 relative transition-all"
+             :class="{ 'opacity-60 grayscale': product.status !== 0, 'cursor-pointer': product.status === 0 }"
+             @click="viewDetail(product)">
           
-          <div v-if="isManaging" class="absolute left-8">
-            <el-checkbox :model-value="selectedItems.has(product.id)" size="large" @change="() => toggleSelection(product.id)" @click.stop />
-          </div>
+          <!-- 多选框 (管理模式下显示) -->
+          <el-checkbox v-if="isEditMode" 
+                       v-model="selectedIds" 
+                       :label="product.id" 
+                       @click.stop 
+                       class="mr-3" />
 
-          <div class="relative w-24 h-24 rounded-md overflow-hidden flex-shrink-0">
-            <img :src="product.imageUrl" :alt="product.title" class="w-full h-full object-cover" />
-            <div v-if="product.status === 2" class="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <span class="text-white text-sm font-bold">已下架</span>
+          <!-- 商品图片 -->
+          <img :src="product.imageUrl || `https://picsum.photos/200/200?random=${product.id}`" 
+               class="w-24 h-24 rounded-lg object-cover flex-shrink-0" />
+
+          <!-- 商品信息 -->
+          <div class="ml-3 flex-grow min-w-0 flex flex-col justify-between h-24">
+            <div>
+              <h3 class="text-sm font-bold text-gray-800 line-clamp-2">{{ product.title }}</h3>
+              <p v-if="product.status !== 0" class="text-[10px] text-red-500 mt-1">
+                {{ product.status === 1 ? '商品已售出' : '商品已下架' }}
+              </p>
             </div>
-          </div>
-          <div class="flex-grow min-w-0 flex flex-col space-y-1">
-            <h3 class="text-base font-medium text-gray-800 leading-tight line-clamp-2" :class="{ 'text-gray-400': product.status === 2 }">{{ product.title }}</h3>
-            <p class="text-lg font-bold" :class="product.status === 2 ? 'text-gray-400' : 'text-red-500'">¥{{ product.price }}</p>
-            <div class="flex items-center text-xs text-gray-400">
-                <img class="h-5 w-5 rounded-full object-cover mr-1.5" :src="product.seller.avatarUrl" alt="seller avatar"/>
-                <span>{{ product.seller.nickname }}</span>
+            <div class="flex justify-between items-baseline">
+              <span class="text-lg font-bold text-red-500">¥{{ product.price }}</span>
+              <span class="text-[10px] text-gray-400">已收藏</span>
             </div>
           </div>
         </div>
       </div>
-      <el-empty v-else :description="emptyDescription"></el-empty>
+
+      <el-empty v-else description="还没有收藏任何宝贝哦~" :image-size="200">
+        <el-button type="primary" @click="router.push('/')">去逛逛</el-button>
+      </el-empty>
     </div>
 
-    <!-- Bottom Management Bar -->
-    <div v-if="isManaging" class="fixed inset-x-0 bottom-0 bg-white border-t border-gray-200 h-16 flex items-center justify-between px-4 z-50">
-        <el-checkbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleSelectAll">全选</el-checkbox>
-        <div class="flex items-center space-x-2">
-            <el-button round plain @click="clearInvalid">清空失效</el-button>
-            <el-button round type="primary" @click="deleteSelected" :class="{ 'opacity-50 cursor-not-allowed': selectedItems.size === 0 }">删除 ({{ selectedItems.size }})</el-button>
-        </div>
-    </div>
+    <!-- 底部删除工具栏 -->
+    <footer v-if="isEditMode && userStore.favoriteProducts.length > 0" 
+            class="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 h-16 flex items-center justify-between px-4 z-50">
+      <el-checkbox :model-value="isAllSelected" @change="toggleSelectAll">全选</el-checkbox>
+      <el-button type="danger" :disabled="selectedIds.length === 0" @click="handleBatchDelete">
+        取消收藏 ({{ selectedIds.length }})
+      </el-button>
+    </footer>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '../../stores/user.store';
+import apiClient from '../../services/api';
 import { ArrowLeftBold } from '@element-plus/icons-vue';
-import { ElMessageBox, ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 const router = useRouter();
 const userStore = useUserStore();
-
-const isManaging = ref(false);
-const selectedItems = ref(new Set());
-const activeFilter = ref('all'); // 'all', 'valid', 'invalid'
-
-const filteredFavorites = computed(() => {
-    switch (activeFilter.value) {
-        case 'valid':
-            return userStore.favoriteProducts.filter(p => p.status !== 2);
-        case 'invalid':
-            return userStore.favoriteProducts.filter(p => p.status === 2);
-        default:
-            return userStore.favoriteProducts;
-    }
-});
-
-const emptyDescription = computed(() => {
-    switch (activeFilter.value) {
-        case 'valid': return '没有有效的收藏';
-        case 'invalid': return '没有失效的收藏';
-        default: return '您还没有收藏任何商品';
-    }
-});
+const loading = ref(false);
+const isEditMode = ref(false);
+const selectedIds = ref([]);
 
 const isAllSelected = computed(() => {
-    return filteredFavorites.value.length > 0 && selectedItems.value.size === filteredFavorites.value.length;
+  return selectedIds.value.length === userStore.favoriteProducts.length && userStore.favoriteProducts.length > 0;
 });
 
-const isIndeterminate = computed(() => {
-    return selectedItems.value.size > 0 && selectedItems.value.size < filteredFavorites.value.length;
-});
+const toggleSelectAll = (val) => {
+  selectedIds.value = val ? userStore.favoriteProducts.map(p => p.id) : [];
+};
 
-const handleBack = () => {
-    if (isManaging.value) {
-        isManaging.value = false;
-        selectedItems.value.clear();
-    } else {
-        router.back();
+const fetchFavorites = async () => {
+  loading.value = true;
+  try {
+    await userStore.fetchMyFavorites();
+  } catch (error) {
+    ElMessage.error('加载收藏列表失败');
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(fetchFavorites);
+
+const viewDetail = (product) => {
+  if (isEditMode.value) return;
+  if (product.status !== 0) {
+    ElMessage.info('该商品已下架或售出，无法查看详情');
+    return;
+  }
+  router.push(`/product/${product.id}`);
+};
+
+const handleBatchDelete = () => {
+  ElMessageBox.confirm(`确定要取消收藏这 ${selectedIds.value.length} 件宝贝吗？`, '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      // 由于后端目前是切换接口，循环调用实现批量取消
+      for (const id of selectedIds.value) {
+        await apiClient.post(`/products/${id}/favorite`);
+      }
+      ElMessage.success('已取消收藏');
+      selectedIds.value = [];
+      isEditMode.value = false;
+      fetchFavorites();
+    } catch (error) {
+      ElMessage.error('操作失败，请重试');
     }
-}
-
-const handleItemClick = (product) => {
-    if (isManaging.value) {
-        toggleSelection(product.id);
-    } else if (product.status !== 2) {
-        router.push(`/product/${product.id}`);
-    }
-}
-
-const toggleManagement = () => {
-    isManaging.value = !isManaging.value;
-    selectedItems.value.clear();
-}
-
-const toggleSelection = (id) => {
-    if (selectedItems.value.has(id)) {
-        selectedItems.value.delete(id);
-    } else {
-        selectedItems.value.add(id);
-    }
-}
-
-const toggleSelectAll = (value) => {
-    if (value) {
-        filteredFavorites.value.forEach(p => selectedItems.value.add(p.id));
-    } else {
-        selectedItems.value.clear();
-    }
-}
-
-const deleteSelected = () => {
-    if (selectedItems.value.size === 0) return;
-    ElMessageBox.confirm(`您确定要删除选中的 ${selectedItems.value.size} 个收藏吗?`, '确认删除', { type: 'warning' })
-    .then(() => {
-        userStore.deleteFavoriteProducts([...selectedItems.value]);
-        ElMessage.success('删除成功');
-        selectedItems.value.clear();
-    }).catch(() => {});
-}
-
-const clearInvalid = () => {
-    const invalidItems = userStore.favoriteProducts.filter(p => p.status === 2);
-    if (invalidItems.length === 0) {
-        ElMessage.info('没有已失效的宝贝');
-        return;
-    }
-    ElMessageBox.confirm(`您确定要清空 ${invalidItems.length} 个已失效的宝贝吗?`, '确认清空', { type: 'warning' })
-    .then(() => {
-        userStore.clearInvalidFavorites();
-        ElMessage.success('已清空失效宝贝');
-    }).catch(() => {});
-}
-
+  }).catch(() => {});
+};
 </script>
 
 <style scoped>
 .line-clamp-2 {
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
-
-:deep(.el-checkbox__inner) {
-    border-radius: 50%;
+:deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background-color: #f97316;
+  border-color: #f97316;
 }
-
-:deep(.el-checkbox__input.is-checked .el-checkbox__inner),
-:deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
-  background-color: #f97316 !important;
-  border-color: #f97316 !important;
-}
-
 :deep(.el-checkbox__input.is-checked + .el-checkbox__label) {
-    color: #f97316 !important;
-}
-
-.custom-tabs :deep(.el-tabs__nav) {
-    float: none;
-}
-.custom-tabs :deep(.el-tabs__item) {
-    padding: 0 20px;
-}
-
-.custom-tabs :deep(.el-tabs__item.is-active) {
-    color: #f97316;
-}
-
-.custom-tabs :deep(.el-tabs__item:hover) {
-    color: #f97316;
-}
-
-.custom-tabs :deep(.el-tabs__active-bar) {
-    background-color: #f97316;
+  color: #f97316;
 }
 </style>

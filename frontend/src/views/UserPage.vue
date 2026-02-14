@@ -9,9 +9,9 @@
       <div class="relative p-4">
         <!-- User Info -->
         <div class="flex items-center mb-4 pt-12">
-            <el-avatar :size="64" :src="userStore.profile.avatarUrl || 'https://i.pravatar.cc/150?u=a042581f4e29026704d'" />
+            <el-avatar :size="64" :src="userStore.profile.avatar || `https://picsum.photos/150/150?random=${userStore.profile.id}`" />
             <div class="ml-4 text-white">
-              <h2 class="text-xl font-bold">{{ userStore.profile.nickname }}</h2>
+              <h2 class="text-xl font-bold">{{ userStore.profile.nickname || '未设置昵称' }}</h2>
               <p class="text-sm opacity-80">用户名: {{ userStore.profile.username }}</p>
             </div>
         </div>
@@ -78,16 +78,38 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '../stores/user.store';
+import apiClient from '../services/api';
+import { ElMessage } from 'element-plus';
 import { Goods, Sell, ShoppingCart, ChatLineSquare, Star, User, Wallet, EditPen, Service } from '@element-plus/icons-vue';
 
 const router = useRouter();
 const userStore = useUserStore();
 
-const contactSupport = () => {
-    const conversationId = userStore.getOrCreateRandomSupportConversation();
-    router.push(`/chat/${conversationId}`);
+onMounted(() => {
+    userStore.fetchProfile();
+});
+
+const contactSupport = async () => {
+    try {
+        // 1. 随机获取一名管理员作为客服
+        const response = await apiClient.get('/users/random-admin');
+        const admin = response.data;
+        
+        // 2. 获取或创建与该管理员的会话
+        const conv = await userStore.getOrCreateConversation(admin.id);
+        
+        // 3. 跳转到聊天窗口，并带上标记以便发送自动招呼
+        router.push({
+            path: `/chat/${conv.id}`,
+            query: { isSupport: 'true' }
+        });
+    } catch (error) {
+        console.error('联系客服失败:', error);
+        ElMessage.error(error.response?.data || '当前暂无在线客服');
+    }
 }
 
 </script>

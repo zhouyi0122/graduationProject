@@ -1,7 +1,7 @@
 spring:
   datasource:
     # 将编码配置从URL中分离出来，交由Hikari连接池管理，这是更推荐的做法
-    url: jdbc:mysql://localhost:3306/campus_trade?serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/campus_secondhand?serverTimezone=Asia/Shanghai
     username: root
     password: 2210534447a # <--- 请确保这里是您的正确数据库密码
     driver-class-name: com.mysql.cj.jdbc.Driver

@@ -14,7 +14,7 @@
       <!-- Balance Card -->
       <el-card class="text-center">
         <p class="text-sm text-gray-500">账户余额 (元)</p>
-        <p class="text-4xl font-bold my-4">{{ userStore.profile.balance.toFixed(2) }}</p>
+        <p class="text-4xl font-bold my-4">{{ (userStore.profile?.balance ?? 0).toFixed(2) }}</p>
         <div class="flex space-x-4">
           <el-button class="w-1/2" size="large" @click="rechargeDialogVisible = true">充值</el-button>
           <el-button type="primary" class="w-1/2" size="large" @click="() => ElMessage.info('提现功能开发中')">提现</el-button>
@@ -26,14 +26,14 @@
         <template #header>
           <div class="font-bold">近期交易</div>
         </template>
-        <div v-if="transactions.length > 0" class="space-y-3">
-          <div v-for="item in transactions" :key="item.id" class="flex justify-between items-center">
+        <div v-if="userStore.transactions.length > 0" class="space-y-3">
+          <div v-for="item in userStore.transactions" :key="item.id" class="flex justify-between items-center">
             <div>
               <p class="font-medium">{{ item.description }}</p>
-              <p class="text-xs text-gray-400 mt-1">{{ item.timestamp }}</p>
+              <p class="text-xs text-gray-400 mt-1">{{ new Date(item.createTime).toLocaleString('zh-CN') }}</p>
             </div>
             <p class="font-bold" :class="item.amount > 0 ? 'text-green-500' : 'text-red-500'">
-              {{ item.amount > 0 ? '+' : '' }}{{ item.amount.toFixed(2) }}
+              {{ item.amount > 0 ? '+' : '' }}{{ Number(item.amount).toFixed(2) }}
             </p>
           </div>
         </div>
@@ -60,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '../../stores/user.store';
 import { ArrowLeftBold } from '@element-plus/icons-vue';
@@ -72,28 +72,32 @@ const userStore = useUserStore();
 const rechargeDialogVisible = ref(false);
 const rechargeAmount = ref(100);
 
-const transactions = ref([
-  { id: 1, description: '卖出商品 - 考研数学资料', amount: 60.00, timestamp: '2023-10-25 11:30' },
-  { id: 2, description: '购买商品 - 九成新山地车', amount: -288.00, timestamp: '2023-10-24 09:15' },
-  { id: 3, description: '提现', amount: -500.00, timestamp: '2023-10-23 18:00' },
-  { id: 4, description: '充值', amount: 1000.00, timestamp: '2023-10-22 12:00' },
-]);
+const fetchAccountData = async () => {
+  try {
+    await userStore.fetchProfile();
+    await userStore.fetchTransactions();
+  } catch (error) {
+    ElMessage.error('同步账户数据失败');
+  }
+};
 
-const handleRecharge = () => {
+onMounted(() => {
+  fetchAccountData();
+});
+
+const handleRecharge = async () => {
     if (rechargeAmount.value <= 0) {
         ElMessage.warning('充值金额必须大于0');
         return;
     }
-    userStore.recharge(rechargeAmount.value);
-    // Add to transaction history
-    transactions.value.unshift({
-        id: Date.now(),
-        description: '充值',
-        amount: rechargeAmount.value,
-        timestamp: new Date().toLocaleString('zh-CN'),
-    });
-    ElMessage.success('充值成功！');
-    rechargeDialogVisible.value = false;
+    try {
+      await userStore.recharge(rechargeAmount.value);
+      ElMessage.success('充值成功！');
+      rechargeDialogVisible.value = false;
+      fetchAccountData(); // 充值后立即刷新
+    } catch (error) {
+      ElMessage.error('充值失败，请稍后再试');
+    }
 }
 
 </script>

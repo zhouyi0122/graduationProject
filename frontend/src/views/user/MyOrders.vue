@@ -28,14 +28,16 @@
                    @click="() => viewOrderDetail(order)">
                 <div class="p-3 flex justify-between items-center border-b border-gray-100">
                     <div class="flex items-center">
-                        <el-avatar :size="28" :src="order.buyer.avatarUrl" />
-                        <span class="ml-2 text-sm font-medium">{{ order.buyer.name }}</span>
+                        <el-avatar :size="28" :src="`https://picsum.photos/100/100?random=u${order.buyerId}`" />
+                        <span class="ml-2 text-sm font-medium">买家ID: {{ order.buyerId }}</span>
                     </div>
-                    <span class="text-sm" :class="(order.status === '已完成' || order.status === '待评价') ? 'text-orange-500' : 'text-gray-500'">{{ (order.status === '已完成' || order.status === '待评价') ? '交易成功' : order.status }}</span>
+                    <span class="text-sm" :class="(order.status === 3 || order.status === 4) ? 'text-orange-500' : 'text-gray-500'">
+                        {{ getStatusLabel(order) }}
+                    </span>
                 </div>
                 <div class="p-3 bg-gray-50 flex space-x-3">
-                    <img :src="order.product.imageUrl" :alt="order.product.title" class="w-16 h-16 rounded-md object-cover flex-shrink-0" />
-                    <p class="text-sm text-gray-700 line-clamp-2">{{ order.product.title }}</p>
+                    <img :src="order.imageUrl || 'https://picsum.photos/200/200?random=' + order.productId" :alt="order.productTitle" class="w-16 h-16 rounded-md object-cover flex-shrink-0" />
+                    <p class="text-sm text-gray-700 line-clamp-2">{{ order.productTitle }}</p>
                 </div>
                 <div class="p-3 text-right border-t border-gray-100">
                     <p class="text-sm">共1件 合计: <span class="text-lg font-bold text-red-500">¥{{ order.totalPrice }}</span></p>
@@ -61,14 +63,16 @@
                    @click="() => viewOrderDetail(order)">
                 <div class="p-3 flex justify-between items-center border-b border-gray-100">
                     <div class="flex items-center">
-                        <el-avatar :size="28" :src="order.seller.avatarUrl" />
-                        <span class="ml-2 text-sm font-medium">{{ order.seller.name }}</span>
+                        <el-avatar :size="28" :src="`https://picsum.photos/100/100?random=u${order.sellerId}`" />
+                        <span class="ml-2 text-sm font-medium">卖家ID: {{ order.sellerId }}</span>
                     </div>
-                    <span class="text-sm" :class="(order.status === '已完成' || order.status === '待评价') ? 'text-orange-500' : 'text-gray-500'">{{ (order.status === '已完成' || order.status === '待评价') ? '交易成功' : order.status }}</span>
+                    <span class="text-sm" :class="(order.status === 3 || order.status === 4) ? 'text-orange-500' : 'text-gray-500'">
+                        {{ getStatusLabel(order) }}
+                    </span>
                 </div>
                 <div class="p-3 bg-gray-50 flex space-x-3">
-                    <img :src="order.product.imageUrl" :alt="order.product.title" class="w-16 h-16 rounded-md object-cover flex-shrink-0" />
-                    <p class="text-sm text-gray-700 line-clamp-2">{{ order.product.title }}</p>
+                    <img :src="order.imageUrl || 'https://picsum.photos/200/200?random=' + order.productId" :alt="order.productTitle" class="w-16 h-16 rounded-md object-cover flex-shrink-0" />
+                    <p class="text-sm text-gray-700 line-clamp-2">{{ order.productTitle }}</p>
                 </div>
                 <div class="p-3 text-right border-t border-gray-100">
                     <p class="text-sm">共1件 合计: <span class="text-lg font-bold text-red-500">¥{{ order.totalPrice }}</span></p>
@@ -96,28 +100,68 @@ const activeStatusFilter = ref('all');
 
 const statusFilters = ref([
     { key: 'all', label: '全部' },
-    { key: 'pending_payment', label: '待付款' },
-    { key: 'pending_shipping', label: '待发货' },
-    { key: 'shipped', label: '待收货' },
-    { key: 'completed', label: '待评价' },
-    { key: 'refund', label: '退款中' },
+    { key: '0', label: '待付款' },
+    { key: '1', label: '待发货' },
+    { key: '2', label: '待收货' },
+    { key: '3', label: '待评价' },
+    { key: '5', label: '退款中' },
 ]);
+
+// 状态映射表
+const getStatusLabel = (order) => {
+    const status = order.status;
+    // 如果正在维权中，优先显示维权中状态
+    if (order.disputeInProgress === 1) {
+        return '维权中';
+    }
+    const map = {
+        0: '待付款',
+        1: '待发货',
+        2: '待收货',
+        3: '待评价',
+        4: '已完成',
+        5: '退款中',
+        6: '已取消',
+        7: '退款成功',
+        8: order.disputeInProgress === 2 ? '退款失败' : '卖家拒绝退款'
+    };
+    return map[status] || '未知状态';
+};
 
 const filteredSoldOrders = computed(() => {
     if (activeStatusFilter.value === 'all') return userStore.soldOrders;
-    const filterLabel = statusFilters.value.find(f => f.key === activeStatusFilter.value)?.label;
-    return userStore.soldOrders.filter(o => o.status === filterLabel);
+    if (activeStatusFilter.value === '5') {
+        // 退款中标签：包含“退款中(5)”和“卖家拒绝退款(8且未被管理员驳回)”
+        return userStore.soldOrders.filter(o => o.status === 5 || (o.status === 8 && o.disputeInProgress !== 2));
+    }
+    return userStore.soldOrders.filter(o => String(o.status) === activeStatusFilter.value);
 });
 
 const filteredBoughtOrders = computed(() => {
     if (activeStatusFilter.value === 'all') return userStore.boughtOrders;
-    const filterLabel = statusFilters.value.find(f => f.key === activeStatusFilter.value)?.label;
-    return userStore.boughtOrders.filter(o => o.status === filterLabel);
+    if (activeStatusFilter.value === '5') {
+        // 退款中标签：包含“退款中(5)”和“卖家拒绝退款(8且未被管理员驳回)”
+        return userStore.boughtOrders.filter(o => o.status === 5 || (o.status === 8 && o.disputeInProgress !== 2));
+    }
+    return userStore.boughtOrders.filter(o => String(o.status) === activeStatusFilter.value);
 });
+
+const loadOrders = async () => {
+    try {
+        await userStore.fetchOrders(activeTab.value);
+    } catch (error) {
+        ElMessage.error('加载订单列表失败');
+    }
+};
 
 onMounted(() => {
     if (route.query.tab) activeTab.value = route.query.tab;
     if (route.query.filter) activeStatusFilter.value = route.query.filter;
+    loadOrders();
+});
+
+watch(activeTab, () => {
+    loadOrders();
 });
 
 watch([activeTab, activeStatusFilter], ([newTab, newFilter]) => {

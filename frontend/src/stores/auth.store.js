@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import apiClient from '../services/api';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -7,36 +8,29 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isLoggedIn: (state) => !!state.user,
-    isAdmin: (state) => state.user && state.user.roles.includes('ROLE_ADMIN'),
+    isAdmin: (state) => state.user && state.user.roles && state.user.roles.includes('ROLE_ADMIN'),
   },
   actions: {
     async login(username, password) {
-      // Simulate API call
-      console.log(`【模拟登录】用户名: ${username}, 密码: ${password}`);
-      return new Promise(resolve => {
-        setTimeout(() => {
-          const isAdmin = username === 'admin';
-          const mockUser = {
-            id: isAdmin ? 999 : 1,
-            username: username,
-            email: `${username}@example.com`,
-            roles: isAdmin ? ['ROLE_ADMIN', 'ROLE_USER'] : ['ROLE_USER'],
-            token: 'fake-jwt-token',
-          };
-          this.user = mockUser;
-          localStorage.setItem('user', JSON.stringify(mockUser));
-          resolve(isAdmin); // Resolve with the admin status
-        }, 500);
-      });
+      try {
+        const response = await apiClient.post('/auth/login', { username, password });
+        const user = response.data;
+        
+        this.user = user;
+        localStorage.setItem('user', JSON.stringify(user));
+        
+        return user.roles && user.roles.includes('ROLE_ADMIN');
+      } catch (error) {
+        throw error.response?.data || new Error('登录请求失败');
+      }
     },
-    async register(user) {
-        // Simulate API call
-        console.log('【模拟注册】:', user);
-        return new Promise(resolve => {
-            setTimeout(() => {
-                resolve({ message: '用户注册成功！' });
-            }, 500);
-        });
+    async register(userData) {
+      try {
+        const response = await apiClient.post('/auth/register', userData);
+        return response.data;
+      } catch (error) {
+        throw error.response?.data || new Error('注册请求失败');
+      }
     },
     logout() {
       this.user = null;

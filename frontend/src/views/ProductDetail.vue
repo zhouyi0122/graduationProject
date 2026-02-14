@@ -78,7 +78,7 @@
           <!-- Comments -->
           <div>
             <div class="flex justify-between items-center">
-              <h2 class="text-md font-semibold">留言 ({{ product.comments.length }})</h2>
+              <h2 class="text-md font-semibold">留言 ({{ comments.length }})</h2>
               <button @click="commentsExpanded = !commentsExpanded" class="text-sm text-gray-500 flex items-center">
                 全部 <el-icon class="ml-1 transition-transform" :class="{ 'rotate-90': commentsExpanded }"><ArrowRightBold /></el-icon>
               </button>
@@ -178,6 +178,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useUserStore } from '../stores/user.store';
 import { useAuthStore } from '../stores/auth.store';
+import apiClient from '../services/api';
 import { ArrowLeftBold, ArrowRightBold, ChatDotRound, Plus } from '@element-plus/icons-vue';
 import { HeartIcon as HeartIconOutline } from '@heroicons/vue/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/vue/24/solid';
@@ -190,36 +191,75 @@ const authStore = useAuthStore();
 
 const isAdmin = computed(() => authStore.isAdmin);
 
-const product = computed(() => {
-    const productId = parseInt(route.params.id, 10);
-    
-    // Find from allProducts first
-    let foundProduct = userStore.allProducts.find(p => p.id === productId);
-    
-    // Fallback for user's own products
-    if (!foundProduct) {
-        foundProduct = userStore.myProducts.find(p => p.id === productId);
-    }
+const product = ref(null);
+const loading = ref(true);
+const comments = ref([]);
 
-    if (foundProduct) {
-        const sellerName = foundProduct.seller || userStore.profile.nickname;
-        const imageUrl = foundProduct.imageUrl || `https://picsum.photos/800/600?random=${productId}`;
-        // This is a simplified version. In a real app, you'd fetch full details.
-        return {
-            ...foundProduct,
-            images: foundProduct.images || [{ src: imageUrl, alt: 'Product view' }],
-            seller: foundProduct.sellerObject || { id: 123, name: sellerName, avatarUrl: `https://i.pravatar.cc/40?u=${sellerName}`, isCertified: true },
-            description: foundProduct.description || '这是一个商品的详细描述...',
-            reviews: foundProduct.reviews || [],
-            comments: foundProduct.comments || [],
-            views: foundProduct.views || 1024,
-        };
+const fetchProductComments = async () => {
+    if (!product.value?.id) return;
+    try {
+        const response = await apiClient.get(`/products/${product.value.id}/comments`);
+        comments.value = response.data.map(c => ({
+            ...c,
+            user: {
+                name: c.user?.nickname || '用户' + c.userId,
+                avatarUrl: c.user?.avatar || `https://picsum.photos/100/100?random=u${c.userId}`
+            },
+            replies: c.replies?.map(r => ({
+                ...r,
+                user: {
+                    name: r.user?.nickname || '用户' + r.userId,
+                    avatarUrl: r.user?.avatar || `https://picsum.photos/100/100?random=u${r.userId}`
+                },
+                comment: r.content // 适配模板字段
+            })) || [],
+            comment: c.content // 适配模板字段
+        }));
+    } catch (error) {
+        console.error('获取留言失败:', error);
     }
-    
-    return null;
+};
+
+const fetchProductDetail = async () => {
+    const productId = route.params.id;
+    try {
+        const response = await apiClient.get(`/products/${productId}`);
+        const data = response.data;
+        
+        // 格式化后端数据以适应模板
+        product.value = {
+            ...data,
+            images: data.images?.length > 0 ? data.images.map(img => ({ src: img.imageUrl, alt: '商品图片' })) : [{ src: data.imageUrl || `https://picsum.photos/800/600?random=${productId}`, alt: '商品图片' }],
+            seller: {
+                id: data.sellerId,
+                name: data.seller?.nickname || '未知卖家',
+                avatarUrl: data.seller?.avatar || `https://picsum.photos/150/150?random=${data.sellerId || 'default'}`,
+                isCertified: data.seller?.isCertified === 1
+            },
+            reviews: [], // 暂时留空，待评论模块联调
+            isFavorited: data.isFavorited || false,
+            favoriteCount: data.favoriteCount || 0
+        };
+        // 同步组件内部状态
+        isFavorited.value = product.value.isFavorited;
+        favoriteCountState.value = product.value.favoriteCount;
+
+        // 获取留言
+        await fetchProductComments();
+    } catch (error) {
+        console.error('获取商品详情失败:', error);
+        ElMessage.error('商品不存在或已被删除');
+    } finally {
+        loading.value = false;
+    }
+};
+
+onMounted(() => {
+    fetchProductDetail();
 });
 
 const isFavorited = ref(false);
+const favoriteCountState = ref(0);
 const commentDialogVisible = ref(false);
 const newComment = ref('');
 const reviewsExpanded = ref(false);
@@ -233,21 +273,69 @@ const reviewReplyDialogVisible = ref(false);
 const newReviewReply = ref('');
 const replyingToReview = ref(null);
 
-const isCurrentUserSeller = computed(() => userStore.profile.username === product.value?.seller.name);
-const favoriteCount = computed(() => product.value?.favorites || 0);
-const displayedReviews = computed(() => reviewsExpanded.value ? product.value?.reviews : product.value?.reviews.slice(0, 1));
-const displayedComments = computed(() => commentsExpanded.value ? product.value?.comments : product.value?.comments.slice(0, 1));
+const isCurrentUserSeller = computed(() => userStore.profile?.username === product.value?.seller?.username);
+const favoriteCount = computed(() => favoriteCountState.value);
+const displayedReviews = computed(() => reviewsExpanded.value ? product.value?.reviews : product.value?.reviews?.slice(0, 1));
+const displayedComments = computed(() => commentsExpanded.value ? comments.value : comments.value?.slice(0, 1));
 
-const toggleFavorite = () => {
-    isFavorited.value = !isFavorited.value;
+const toggleFavorite = async () => {
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning('请先登录后再进行操作');
+        router.push('/login');
+        return;
+    }
+    try {
+        const response = await apiClient.post(`/products/${product.value.id}/favorite`);
+        const { status } = response.data;
+        isFavorited.value = (status === 1);
+        // 更新收藏总数
+        if (status === 1) {
+            favoriteCountState.value++;
+        } else {
+            favoriteCountState.value--;
+        }
+        ElMessage.success(response.data.message);
+    } catch (error) {
+        console.error('切换收藏状态失败:', error);
+        ElMessage.error('操作失败，请检查网络或登录状态');
+    }
 };
 
-const startChat = () => {
-    const conversationId = userStore.getOrCreateConversationBySeller(product.value.seller, product.value.title);
-    router.push(`/chat/${conversationId}`);
+const startChat = async () => {
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning('请先登录后再进行操作');
+        router.push('/login');
+        return;
+    }
+    
+    // 确保不跟自己聊天
+    if (String(product.value.sellerId) === String(authStore.user.id)) {
+        ElMessage.warning('这是您自己发布的商品哦');
+        return;
+    }
+
+    try {
+        // 调用 store 中真实的接口，根据卖家 ID 获取或创建会话
+        const conv = await userStore.getOrCreateConversation(product.value.sellerId);
+        if (conv && conv.id) {
+            // 跳转时带上 productId，以便聊天窗识别并发送商品卡片
+            router.push({
+                path: `/chat/${conv.id}`,
+                query: { productId: product.value.id }
+            });
+        }
+    } catch (error) {
+        console.error('发起聊天失败:', error);
+        ElMessage.error('无法发起聊天，请稍后再试');
+    }
 }
 
 const handleBuyNow = () => {
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning('请先登录后再进行操作');
+        router.push('/login');
+        return;
+    }
     router.push({
         name: 'OrderConfirmation',
         query: { product: JSON.stringify(product.value) }
@@ -263,30 +351,53 @@ const handleToggleStatus = () => {
     }).catch(() => {});
 }
 
-const handlePostComment = () => {
+const handlePostComment = async () => {
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning('请先登录后再发表留言');
+        router.push('/login');
+        return;
+    }
     if (!newComment.value.trim()) {
         ElMessage.warning('留言内容不能为空！');
         return;
     }
-    userStore.addCommentToProduct(product.value.id, newComment.value);
-    ElMessage.success('留言成功！');
-    commentDialogVisible.value = false;
-    newComment.value = '';
+    try {
+        await apiClient.post(`/products/${product.value.id}/comments`, { content: newComment.value });
+        ElMessage.success('留言成功！');
+        commentDialogVisible.value = false;
+        newComment.value = '';
+        await fetchProductComments(); // 重新拉取留言列表
+    } catch (error) {
+        console.error('发表留言失败:', error);
+        ElMessage.error('留言失败，请检查登录状态');
+    }
 };
 
 const openReplyDialog = (comment) => {
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning('请先登录后再回复');
+        router.push('/login');
+        return;
+    }
     replyingToComment.value = comment;
     replyDialogVisible.value = true;
 }
 
-const handlePostReply = () => {
+const handlePostReply = async () => {
     if (!newReply.value.trim()) {
         ElMessage.warning('回复内容不能为空！');
         return;
     }
-    userStore.addReplyToComment(product.value.id, replyingToComment.value.id, newReply.value);
-    replyDialogVisible.value = false;
-    newReply.value = '';
+    try {
+        await apiClient.post(`/products/comments/${replyingToComment.value.id}/replies`, { content: newReply.value });
+        ElMessage.success('回复成功！');
+        replyDialogVisible.value = false;
+        newReply.value = '';
+        await fetchProductComments(); // 重新拉取留言列表
+    } catch (error) {
+        console.error('回复失败:', error);
+        ElMessage.error('回复失败，请稍后再试');
+    }
 }
 
 const openReviewReplyDialog = (review) => {
