@@ -33,13 +33,13 @@
                     <el-tag v-if="review.isAdditional === 1" size="small" type="warning" class="ml-2" effect="dark">追评</el-tag>
                   </span>
                   <el-rate v-if="review.isAdditional === 0" v-model="review.rating" disabled />
-                </div>
+        </div>
                 
                 <!-- 买家评价样式 -->
                 <p class="text-gray-700 mt-3 text-sm leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-100">
                   {{ review.content }}
                 </p>
-                
+        
                 <div class="flex justify-between items-center mt-3">
                   <span class="text-xs text-gray-400">{{ formatDate(review.createTime) }}</span>
                   <!-- 回复按钮逻辑 -->
@@ -48,7 +48,7 @@
                              @click="openReplyDialog(review)">
                     回复客户
                   </el-button>
-                </div>
+        </div>
 
                 <!-- 卖家回复展示区域：样式与买家一致，色调改为橙色 -->
                 <div v-for="reply in getReplies(review.id)" :key="reply.id" class="mt-4">
@@ -96,7 +96,7 @@
         <div class="flex space-x-3">
           <el-button @click="replyDialogVisible = false" class="flex-grow">取消</el-button>
           <el-button type="primary" @click="submitReply" class="flex-grow">发送回复</el-button>
-        </div>
+    </div>
       </template>
     </el-dialog>
   </div>
@@ -161,7 +161,7 @@ const fetchData = async () => {
     ElMessage.error('数据加载失败');
   } finally {
     loading.value = false;
-  }
+    }
 };
 
 const submitAdditionalReview = async () => {

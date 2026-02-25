@@ -12,14 +12,23 @@
                   class="flex items-center p-3 cursor-pointer border-b border-gray-100 transition-colors"
                   :class="{ 'bg-orange-50': activeConversation && activeConversation.id === convo.id }"
                   @click="selectConversation(convo)">
-                <el-avatar :size="48" :src="convo.otherUser?.avatar || `https://picsum.photos/100/100?random=u${convo.otherUser?.id}`" />
+                <div class="relative flex-shrink-0">
+                  <el-avatar :size="48" :src="convo.otherUser?.avatar || `https://picsum.photos/100/100?random=u${convo.otherUser?.id}`" />
+                  <!-- 管理员端消息红点 -->
+                  <div v-if="convo.unreadCount > 0" 
+                       style="position: absolute !important; top: -5px !important; right: -5px !important; background-color: #ff4d4f !important; color: white !important; font-size: 12px !important; min-width: 18px !important; height: 18px !important; border-radius: 9px !important; display: flex !important; align-items: center !important; justify-content: center !important; padding: 0 4px !important; border: 2px solid white !important; z-index: 10 !important; font-weight: bold !important; box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;">
+                      {{ convo.unreadCount > 99 ? '99+' : convo.unreadCount }}
+                  </div>
+                </div>
                 <div class="flex-grow ml-3 min-w-0">
                   <div class="flex justify-between items-center">
-                    <p class="font-semibold text-gray-800 truncate">{{ convo.otherUser?.nickname || '用户' }}</p>
+                    <div class="flex items-center gap-2 min-w-0">
+                      <p class="font-semibold text-gray-800 truncate">{{ convo.otherUser?.nickname || '用户' }}</p>
+                    </div>
                     <p class="text-[10px] text-gray-400 flex-shrink-0">{{ formatTime(convo.lastTime) }}</p>
                   </div>
                   <div class="flex justify-between items-start mt-1">
-                    <p class="text-sm text-gray-500 truncate">{{ convo.lastMessage || '暂无消息' }}</p>
+                    <p class="text-sm text-gray-500 truncate">{{ formatLastMessage(convo.lastMessage) }}</p>
                   </div>
                 </div>
               </div>
@@ -39,7 +48,39 @@
                     :class="['flex items-start gap-2', isMe(msg.senderId) ? 'flex-row-reverse' : '']">
                   <el-avatar :size="40" :src="isMe(msg.senderId) ? (userStore.profile.avatar || `https://picsum.photos/40?random=me`) : (activeConversation.otherUser?.avatar || `https://picsum.photos/40?random=u${activeConversation.otherUser?.id}`)" />
                   <div class="flex flex-col" :class="[isMe(msg.senderId) ? 'items-end' : 'items-start']">
-                      <div :class="['max-w-md px-4 py-2 rounded-xl shadow-sm',
+                      <!-- 1. 商品小卡片消息 -->
+                      <div v-if="isProductCard(msg.content)"
+                           @click="goToProductDetail(parseProductCard(msg.content).id)"
+                           class="max-w-xs bg-white rounded-xl overflow-hidden shadow-md border border-gray-100 mb-1 cursor-pointer hover:shadow-lg active:scale-95 transition-all">
+                        <img :src="parseProductCard(msg.content).imageUrl" class="w-full h-32 object-cover" />
+                        <div class="p-3">
+                          <p class="text-sm font-bold text-gray-800 line-clamp-2 mb-2">{{ parseProductCard(msg.content).title }}</p>
+                          <div class="flex justify-between items-center">
+                            <span class="text-base font-bold text-red-500">¥{{ parseProductCard(msg.content).price }}</span>
+                            <span class="text-[10px] text-gray-400">查看详情</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- 2. 订单小卡片消息 -->
+                      <div v-else-if="isOrderCard(msg.content)"
+                           @click="goToOrderDetail(parseOrderCard(msg.content).id)"
+                           class="max-w-xs bg-white rounded-xl overflow-hidden shadow-md border border-gray-100 mb-1 cursor-pointer hover:shadow-lg active:scale-95 transition-all">
+                        <div class="p-3 border-b border-gray-50 bg-gray-50/50 flex justify-between items-center">
+                          <span class="text-[10px] text-gray-500">订单编号: {{ parseOrderCard(msg.content).orderNumber }}</span>
+                          <span class="text-[10px] text-orange-500">查看详情</span>
+                        </div>
+                        <div class="p-3 flex space-x-3">
+                          <img :src="parseOrderCard(msg.content).imageUrl" class="w-16 h-16 rounded-md object-cover flex-shrink-0" />
+                          <div class="flex-grow min-w-0 flex flex-col justify-between py-0.5">
+                            <p class="text-xs font-bold text-gray-800 line-clamp-2">{{ parseOrderCard(msg.content).title }}</p>
+                            <span class="text-sm font-bold text-red-500">¥{{ parseOrderCard(msg.content).price }}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- 3. 普通文本消息 -->
+                      <div v-else :class="['max-w-md px-4 py-2 rounded-xl shadow-sm',
                                   isMe(msg.senderId) ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none']">
                         <p class="text-sm whitespace-pre-wrap break-all">{{ msg.content }}</p>
                       </div>
@@ -99,12 +140,14 @@
 
 <script setup>
 import { ref, reactive, computed, nextTick, watch, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useUserStore } from '../../stores/user.store';
 import { useAuthStore } from '../../stores/auth.store';
 import apiClient from '../../services/api';
 import { Search } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
+const router = useRouter();
 const userStore = useUserStore();
 const authStore = useAuthStore();
 
@@ -121,6 +164,33 @@ let refreshInterval = null;
 const notificationForm = reactive({ title: '', content: '' });
 
 const isMe = (senderId) => String(senderId) === String(authStore.user?.id);
+
+// 商品卡片逻辑
+const isProductCard = (content) => content && content.startsWith('[PRODUCT_CARD]');
+const parseProductCard = (content) => {
+    try { return JSON.parse(content.replace('[PRODUCT_CARD]', '')); } catch (e) { return {}; }
+}
+
+// 订单卡片逻辑
+const isOrderCard = (content) => content && content.startsWith('[ORDER_CARD]');
+const parseOrderCard = (content) => {
+    try { return JSON.parse(content.replace('[ORDER_CARD]', '')); } catch (e) { return {}; }
+}
+
+const goToProductDetail = (productId) => {
+    router.push(`/product/${productId}`);
+}
+
+const goToOrderDetail = (orderId) => {
+    router.push(`/admin/orders/${orderId}`);
+}
+
+const formatLastMessage = (content) => {
+    if (!content) return '暂无消息';
+    if (content.startsWith('[PRODUCT_CARD]')) return '[商品信息]';
+    if (content.startsWith('[ORDER_CARD]')) return '[订单信息]';
+    return content;
+}
 
 const formatTime = (timeStr) => {
     if (!timeStr) return '';
@@ -158,6 +228,12 @@ const selectConversation = async (convo) => {
     try {
         const msgs = await userStore.fetchMessages(convo.id);
         currentMessages.value = msgs;
+        
+        // 标记已读
+        if (convo.unreadCount > 0) {
+            await userStore.markConversationAsRead(convo.id);
+        }
+        
         scrollToBottom();
     } catch (error) {
         ElMessage.error('加载消息失败');

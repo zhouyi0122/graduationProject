@@ -152,6 +152,11 @@ const loadChatData = async () => {
         const msgs = await userStore.fetchMessages(conversationId);
         messages.value = msgs;
         
+        // 标记已读
+        if (msgs.length > 0) {
+            await userStore.markConversationAsRead(conversationId);
+        }
+        
         if (!otherUser.value) {
             if (userStore.conversations.length === 0) {
                 await userStore.fetchConversations();
@@ -171,22 +176,34 @@ const loadChatData = async () => {
 const handleAutoMessages = async () => {
     try {
         await loadChatData();
-        // 如果已经有聊天记录了，且不是管理员带 orderId 进来的，就不再重复发送自动消息
-        if (messages.value.length > 0 && !initialOrderId) return;
+        
+        // 关键修复：逻辑调整，为了避免轮询导致的重复发送，我们检查最后几条消息是否已经包含该商品卡片
+        const hasSentRecentProduct = messages.value.slice(-5).some(m => 
+            m.content.includes(`[PRODUCT_CARD]{"id":${initialProductId}`) || 
+            m.content.includes(`[PRODUCT_CARD]{"id":"${initialProductId}"`)
+        );
 
-        if (initialProductId) {
+        if (initialProductId && !hasSentRecentProduct) {
+            console.log('DEBUG: Auto-sending product info for product ID:', initialProductId);
             const product = await productStore.fetchProductById(initialProductId);
             if (product) {
+                // 立即发送招呼语
                 await userStore.sendChatMessage(conversationId, '您好，我想咨询一下这个商品：');
                 const cardData = {
                     id: product.id,
                     title: product.title,
                     price: product.price,
-                    imageUrl: product.imageUrl || `https://picsum.photos/400/300?random=${product.id}`
+                    imageUrl: product.imageUrl || (product.images && product.images.length > 0 ? product.images[0].imageUrl : `https://picsum.photos/400/300?random=${product.id}`)
                 };
+                // 立即发送商品卡片
                 await userStore.sendChatMessage(conversationId, `[PRODUCT_CARD]${JSON.stringify(cardData)}`);
+                // 发送完立即刷新列表
+                await loadChatData();
             }
         } else if (initialOrderId) {
+            // 如果已经有聊天记录了，且不是管理员带 orderId 进来的，就不再重复发送自动消息
+            if (messages.value.length > 0) return;
+            
             // 管理员介入维权订单
             const response = await apiClient.get(`/orders/${initialOrderId}`);
             const orderDetail = response.data;
@@ -200,12 +217,13 @@ const handleAutoMessages = async () => {
                     imageUrl: orderDetail.product.imageUrl || `https://picsum.photos/200/200?random=${orderDetail.order.id}`
                 };
                 await userStore.sendChatMessage(conversationId, `[ORDER_CARD]${JSON.stringify(orderCardData)}`);
+                await loadChatData();
             }
         } else if (isFromSupport) {
+            if (messages.value.length > 0) return;
             await userStore.sendChatMessage(conversationId, '您好，我需要客服支持，请帮我处理一下问题。');
+            await loadChatData();
         }
-        
-        await loadChatData();
     } catch (error) {
         console.error('自动发送消息失败:', error);
     }

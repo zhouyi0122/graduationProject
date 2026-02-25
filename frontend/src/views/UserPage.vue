@@ -37,7 +37,7 @@
               <el-icon :size="28" class="mb-1"><ShoppingCart /></el-icon>
               <span>我买到的</span>
             </div>
-            <div @click="() => router.push({ path: '/user/orders', query: { tab: 'bought', filter: 'completed' } })" class="flex flex-col items-center justify-center cursor-pointer">
+            <div @click="() => router.push({ path: '/user/orders', query: { tab: 'bought', filter: '3' } })" class="flex flex-col items-center justify-center cursor-pointer">
               <el-icon :size="28" class="mb-1"><ChatLineSquare /></el-icon>
               <span>待评价</span>
             </div>

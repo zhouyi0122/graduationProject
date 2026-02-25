@@ -45,6 +45,13 @@ public interface ProductService extends IService<Product> {
      * @return 切换后的收藏状态（1:已收藏, 2:未收藏）
      */
     Integer toggleFavorite(Long productId, Long userId);
+
+    /**
+     * 获取指定用户发布的商品列表（包含主图）
+     * @param userId 用户ID
+     * @return 商品列表
+     */
+    java.util.List<Product> getMyProducts(Long userId);
 }
 
 

@@ -21,7 +21,7 @@
             </span>
             <span class="inline-flex items-center cursor-pointer hover:text-orange-500" @click.prevent.stop="toggleFavorite">
                 <component :is="isFavorited ? HeartIconSolid : HeartIconOutline" class="h-4 w-4 mr-0.5" :class="{ 'text-orange-500': isFavorited }" />
-                <span>{{ product.favoriteCount ?? 0 }}</span>
+                <span>{{ localFavoriteCount }}</span>
             </span>
         </div>
       </div>
@@ -36,27 +36,47 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { View } from '@element-plus/icons-vue';
 import { HeartIcon as HeartIconOutline } from '@heroicons/vue/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/vue/24/solid';
+import { useProductStore } from '../stores/product.store';
+import { useAuthStore } from '../stores/auth.store';
+import { ElMessage } from 'element-plus';
 
-defineProps({
+const props = defineProps({
   product: {
     type: Object,
     required: true,
   },
 });
 
-const isFavorited = ref(false);
-const favoriteCount = ref(Math.floor(Math.random() * 200));
+const productStore = useProductStore();
+const authStore = useAuthStore();
 
-const toggleFavorite = () => {
-    isFavorited.value = !isFavorited.value;
-    if (isFavorited.value) {
-        favoriteCount.value++;
-    } else {
-        favoriteCount.value--;
+const isFavorited = ref(props.product.isFavorited || false);
+const localFavoriteCount = ref(props.product.favoriteCount || 0);
+
+// 监听 props 变化，确保详情页修改后回到首页能同步状态
+watch(() => props.product.isFavorited, (newVal) => {
+    isFavorited.value = newVal;
+});
+watch(() => props.product.favoriteCount, (newVal) => {
+    localFavoriteCount.value = newVal;
+});
+
+const toggleFavorite = async () => {
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning('请先登录后再进行操作');
+        return;
+    }
+    try {
+        const res = await productStore.toggleFavorite(props.product.id);
+        // 移除这里的手动加减逻辑，完全交给 productStore 的数据和 watch 监听器
+        ElMessage.success(res.message);
+    } catch (error) {
+        console.error('切换收藏状态失败:', error);
+        ElMessage.error('操作失败，请检查网络或登录状态');
     }
 };
 

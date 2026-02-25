@@ -31,9 +31,6 @@ public class ChatController {
     @Autowired
     private UserService userService;
 
-    /**
-     * 获取当前用户的所有会话列表
-     */
     @GetMapping("/conversations")
     public ResponseEntity<?> getConversations() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -44,8 +41,7 @@ public class ChatController {
 
         List<Conversation> conversations = conversationMapper.selectList(
             new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Conversation>()
-                .or(i -> i.eq("user1_id", currentUserId))
-                .or(i -> i.eq("user2_id", currentUserId))
+                .nested(i -> i.eq("user1_id", currentUserId).or().eq("user2_id", currentUserId))
                 .orderByDesc("last_time")
         );
 
@@ -56,9 +52,38 @@ public class ChatController {
                 otherUser.setPassword(null);
                 conv.setOtherUser(otherUser);
             }
+
+            // 统计当前用户的未读消息数
+            Long unreadCount = messageMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ConversationMessage>()
+                    .eq("conversation_id", conv.getId())
+                    .ne("sender_id", currentUserId)
+                    .eq("is_read", 0)
+            );
+            conv.setUnreadCount(unreadCount.intValue());
         }
 
         return ResponseEntity.ok(conversations);
+    }
+
+    @PutMapping("/conversations/{id}/read")
+    public ResponseEntity<?> markAsRead(@PathVariable Long id) {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (!(principal instanceof UserDetailsImpl userDetails)) {
+            return ResponseEntity.status(401).body("未登录");
+        }
+        Long currentUserId = userDetails.getId();
+
+        // 将该会话中，发送者不是当前用户的所有未读消息标记为已读
+        int rows = messageMapper.update(null,
+            new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<ConversationMessage>()
+                .set("is_read", 1)
+                .eq("conversation_id", id)
+                .ne("sender_id", currentUserId)
+                .eq("is_read", 0)
+        );
+
+        return ResponseEntity.ok(Map.of("message", "已标记为已读", "rows", rows));
     }
 
     /**
@@ -113,9 +138,6 @@ public class ChatController {
         return ResponseEntity.ok(messages);
     }
 
-    /**
-     * 发送私信消息
-     */
     @PostMapping("/messages")
     public ResponseEntity<?> sendMessage(@RequestBody Map<String, Object> request) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();

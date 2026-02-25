@@ -92,8 +92,8 @@ const handleRecharge = async () => {
     }
     try {
       await userStore.recharge(rechargeAmount.value);
-      ElMessage.success('充值成功！');
-      rechargeDialogVisible.value = false;
+    ElMessage.success('充值成功！');
+    rechargeDialogVisible.value = false;
       fetchAccountData(); // 充值后立即刷新
     } catch (error) {
       ElMessage.error('充值失败，请稍后再试');

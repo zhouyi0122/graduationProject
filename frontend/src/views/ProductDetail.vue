@@ -7,11 +7,30 @@
       </button>
 
       <!-- Image Carousel -->
-      <el-carousel height="350px" indicator-position="outside">
-        <el-carousel-item v-for="item in product.images" :key="item.src">
-          <img :src="item.src" :alt="item.alt" class="w-full h-full object-cover" />
-        </el-carousel-item>
-      </el-carousel>
+      <div class="relative bg-white">
+        <el-carousel height="375px" indicator-position="none" arrow="always" :autoplay="false" @change="handleCarouselChange">
+          <el-carousel-item v-for="(item, index) in product.images" :key="index">
+            <el-image 
+              :src="item.src" 
+              fit="contain" 
+              class="w-full h-full cursor-zoom-in bg-gray-50"
+              @click="openPreview(index)"
+            />
+          </el-carousel-item>
+        </el-carousel>
+        <!-- 指示器 -->
+        <div v-if="product.images.length > 1" class="absolute bottom-4 right-4 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full z-10">
+          {{ currentImageIndex + 1 }}/{{ product.images.length }}
+        </div>
+      </div>
+
+      <!-- 大图预览 -->
+      <el-image-viewer
+        v-if="showViewer"
+        :url-list="product.images.map(img => img.src)"
+        :initial-index="previewIndex"
+        @close="showViewer = false"
+      />
 
       <div class="p-4 space-y-4">
         <!-- Seller Info -->
@@ -178,6 +197,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useUserStore } from '../stores/user.store';
 import { useAuthStore } from '../stores/auth.store';
+import { useProductStore } from '../stores/product.store';
 import apiClient from '../services/api';
 import { ArrowLeftBold, ArrowRightBold, ChatDotRound, Plus } from '@element-plus/icons-vue';
 import { HeartIcon as HeartIconOutline } from '@heroicons/vue/24/outline';
@@ -188,12 +208,26 @@ const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 const authStore = useAuthStore();
+const productStore = useProductStore();
 
 const isAdmin = computed(() => authStore.isAdmin);
 
 const product = ref(null);
 const loading = ref(true);
 const comments = ref([]);
+
+const currentImageIndex = ref(0);
+const showViewer = ref(false);
+const previewIndex = ref(0);
+
+const handleCarouselChange = (index) => {
+    currentImageIndex.value = index;
+};
+
+const openPreview = (index) => {
+    previewIndex.value = index;
+    showViewer.value = true;
+};
 
 const fetchProductComments = async () => {
     if (!product.value?.id) return;
@@ -285,8 +319,8 @@ const toggleFavorite = async () => {
         return;
     }
     try {
-        const response = await apiClient.post(`/products/${product.value.id}/favorite`);
-        const { status } = response.data;
+        const res = await productStore.toggleFavorite(product.value.id);
+        const { status } = res;
         isFavorited.value = (status === 1);
         // 更新收藏总数
         if (status === 1) {
@@ -294,7 +328,7 @@ const toggleFavorite = async () => {
         } else {
             favoriteCountState.value--;
         }
-        ElMessage.success(response.data.message);
+        ElMessage.success(res.message);
     } catch (error) {
         console.error('切换收藏状态失败:', error);
         ElMessage.error('操作失败，请检查网络或登录状态');
@@ -336,6 +370,13 @@ const handleBuyNow = () => {
         router.push('/login');
         return;
     }
+    
+    // 校验：不能购买自己发布的商品
+    if (String(product.value.sellerId) === String(authStore.user.id)) {
+        ElMessage.warning('这是您自己发布的商品哦');
+        return;
+    }
+
     router.push({
         name: 'OrderConfirmation',
         query: { product: JSON.stringify(product.value) }

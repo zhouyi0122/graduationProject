@@ -23,12 +23,24 @@
         <div v-if="!isManaging" 
              class="flex items-center p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50"
              @click="router.push('/chat/system/all')">
-          <div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center ml-2">
-              <el-icon :size="24" color="white"><Bell /></el-icon>
+          <div class="relative flex-shrink-0 ml-2">
+            <div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center">
+                <el-icon :size="24" color="white"><Bell /></el-icon>
+            </div>
+            <!-- 系统通知未读红点 -->
+            <div v-if="userStore.unreadNotificationsCount > 0" 
+                 style="position: absolute !important; top: -5px !important; right: -5px !important; background-color: #ff4d4f !important; color: white !important; font-size: 12px !important; min-width: 18px !important; height: 18px !important; border-radius: 9px !important; display: flex !important; align-items: center !important; justify-content: center !important; padding: 0 4px !important; border: 2px solid white !important; z-index: 50 !important; font-weight: bold !important; box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;">
+                {{ userStore.unreadNotificationsCount > 99 ? '99+' : userStore.unreadNotificationsCount }}
+            </div>
           </div>
           <div class="flex-grow ml-3 min-w-0">
               <div class="flex justify-between items-center">
-                <p class="font-semibold text-gray-800 truncate">系统通知</p>
+                <div class="flex items-center gap-2">
+                  <p class="font-semibold text-gray-800 truncate">系统通知</p>
+                  <span v-if="userStore.unreadNotificationsCount > 0" class="text-red-500 font-bold text-xs bg-red-50 px-1 rounded">
+                      ({{ userStore.unreadNotificationsCount }}条未读)
+                  </span>
+                </div>
                 <p v-if="latestNotif" class="text-xs text-gray-400 flex-shrink-0">{{ formatTime(latestNotif.createTime) }}</p>
               </div>
               <p class="text-sm text-gray-500 truncate">{{ latestNotif ? latestNotif.title : '查看平台最新公告与消息' }}</p>
@@ -42,15 +54,22 @@
             
               <el-checkbox v-if="isManaging" :model-value="selectedConversations.includes(convo.id)" @click.stop @change="() => toggleSelection(convo.id)" size="large" />
               
-              <el-avatar :size="48" :src="convo.otherUser?.avatar || `https://picsum.photos/100/100?random=u${convo.otherUser?.id}`" class="ml-2" />
+              <div class="relative flex-shrink-0 ml-2">
+                <el-avatar :size="48" :src="convo.otherUser?.avatar || `https://picsum.photos/100/100?random=u${convo.otherUser?.id}`" />
+                <!-- 消息红点显示 -->
+                <div v-if="convo.unreadCount > 0" 
+                     class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1 border-2 border-white z-10 font-bold shadow-sm">
+                    {{ convo.unreadCount > 99 ? '99+' : convo.unreadCount }}
+                </div>
+              </div>
 
               <div class="flex-grow ml-3 min-w-0">
                   <div class="flex justify-between items-center">
-                  <p class="font-semibold text-gray-800 truncate">{{ convo.otherUser?.nickname || '闲置用户' }}</p>
-                  <p class="text-xs text-gray-400 flex-shrink-0">{{ formatTime(convo.lastTime) }}</p>
+                    <p class="font-semibold text-gray-800 truncate">{{ convo.otherUser?.nickname || '闲置用户' }}</p>
+                    <p class="text-xs text-gray-400 flex-shrink-0">{{ formatTime(convo.lastTime) }}</p>
                   </div>
                   <div class="flex justify-between items-start mt-1">
-                  <p class="text-sm text-gray-500 truncate">{{ convo.lastMessage || '暂无消息' }}</p>
+                    <p class="text-sm text-gray-500 truncate">{{ formatLastMessage(convo.lastMessage) }}</p>
                   </div>
               </div>
             </div>
@@ -88,6 +107,13 @@ let refreshInterval = null;
 const latestNotif = computed(() => {
     return userStore.notifications.length > 0 ? userStore.notifications[0] : null;
 });
+
+const formatLastMessage = (content) => {
+    if (!content) return '暂无消息';
+    if (content.startsWith('[PRODUCT_CARD]')) return '[商品信息]';
+    if (content.startsWith('[ORDER_CARD]')) return '[订单信息]';
+    return content;
+}
 
 const displayedConversations = computed(() => {
     const baseConversations = userStore.conversations;

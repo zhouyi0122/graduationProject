@@ -53,6 +53,10 @@ onMounted(async () => {
     loading.value = true;
     try {
         await userStore.fetchNotifications();
+        // 进入页面即标记为已读
+        if (userStore.unreadNotificationsCount > 0) {
+            await userStore.markNotificationsAsRead();
+        }
     } catch (error) {
         ElMessage.error('加载通知失败');
     } finally {

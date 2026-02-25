@@ -111,6 +111,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 order.setImageUrl(mainImg != null ? mainImg.getImageUrl() : "https://picsum.photos/200/200?random=" + product.getId());
             }
             
+            // 关联查询用户信息
+            User buyer = userService.getById(order.getBuyerId());
+            if (buyer != null) {
+                order.setBuyerNickname(buyer.getNickname());
+                order.setBuyerAvatar(buyer.getAvatar());
+            }
+            User seller = userService.getById(order.getSellerId());
+            if (seller != null) {
+                order.setSellerNickname(seller.getNickname());
+                order.setSellerAvatar(seller.getAvatar());
+            }
+
             // 关联查询维权状态
             OrderRefund refund = orderRefundMapper.selectOne(new QueryWrapper<OrderRefund>().eq("order_id", order.getId()));
             if (refund != null) {

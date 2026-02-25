@@ -27,4 +27,7 @@ public class Conversation {
     // 非数据库字段，用于返回对方用户信息
     @TableField(exist = false)
     private User otherUser;
+
+    @TableField(exist = false)
+    private Integer unreadCount = 0;
 }

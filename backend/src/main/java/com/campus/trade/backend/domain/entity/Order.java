@@ -58,7 +58,13 @@ public class Order {
     private String buyerNickname;
 
     @TableField(exist = false)
+    private String buyerAvatar;
+
+    @TableField(exist = false)
     private String sellerNickname;
+
+    @TableField(exist = false)
+    private String sellerAvatar;
 
     @TableField(exist = false)
     private Integer disputeInProgress;

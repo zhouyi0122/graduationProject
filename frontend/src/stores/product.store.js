@@ -62,6 +62,28 @@ export const useProductStore = defineStore('products', {
         console.error('切换商品状态失败:', error);
         throw error;
       }
+    },
+    // 新增：切换收藏状态
+    async toggleFavorite(productId) {
+      try {
+        const response = await apiClient.post(`/products/${productId}/favorite`);
+        const { status } = response.data;
+        
+        // 同步更新本地列表中的状态
+        const product = this.products.find(p => p.id === productId);
+        if (product) {
+          product.isFavorited = (status === 1);
+          if (status === 1) {
+            product.favoriteCount = (product.favoriteCount || 0) + 1;
+          } else {
+            product.favoriteCount = Math.max(0, (product.favoriteCount || 0) - 1);
+          }
+        }
+        return response.data;
+      } catch (error) {
+        console.error('切换收藏状态失败:', error);
+        throw error;
+      }
     }
   },
 });

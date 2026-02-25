@@ -28,8 +28,8 @@
                    @click="() => viewOrderDetail(order)">
                 <div class="p-3 flex justify-between items-center border-b border-gray-100">
                     <div class="flex items-center">
-                        <el-avatar :size="28" :src="`https://picsum.photos/100/100?random=u${order.buyerId}`" />
-                        <span class="ml-2 text-sm font-medium">买家ID: {{ order.buyerId }}</span>
+                        <el-avatar :size="28" :src="order.buyerAvatar || `https://picsum.photos/100/100?random=u${order.buyerId}`" />
+                        <span class="ml-2 text-sm font-medium">{{ order.buyerNickname || '买家' + order.buyerId }}</span>
                     </div>
                     <span class="text-sm" :class="(order.status === 3 || order.status === 4) ? 'text-orange-500' : 'text-gray-500'">
                         {{ getStatusLabel(order) }}
@@ -63,8 +63,8 @@
                    @click="() => viewOrderDetail(order)">
                 <div class="p-3 flex justify-between items-center border-b border-gray-100">
                     <div class="flex items-center">
-                        <el-avatar :size="28" :src="`https://picsum.photos/100/100?random=u${order.sellerId}`" />
-                        <span class="ml-2 text-sm font-medium">卖家ID: {{ order.sellerId }}</span>
+                        <el-avatar :size="28" :src="order.sellerAvatar || `https://picsum.photos/100/100?random=u${order.sellerId}`" />
+                        <span class="ml-2 text-sm font-medium">{{ order.sellerNickname || '卖家' + order.sellerId }}</span>
                     </div>
                     <span class="text-sm" :class="(order.status === 3 || order.status === 4) ? 'text-orange-500' : 'text-gray-500'">
                         {{ getStatusLabel(order) }}

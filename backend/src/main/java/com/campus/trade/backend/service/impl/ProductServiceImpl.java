@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trade.backend.domain.dto.ProductDTO;
 import com.campus.trade.backend.domain.entity.Product;
+import com.campus.trade.backend.domain.entity.ProductImage;
 import com.campus.trade.backend.domain.entity.User;
 import com.campus.trade.backend.mapper.ProductMapper;
 import com.campus.trade.backend.security.services.UserDetailsImpl;
@@ -61,6 +62,19 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         // 插入商品数据到数据库
         this.save(product);
 
+        // 处理多图保存
+        List<String> images = productDTO.getImages();
+        if (images != null && !images.isEmpty()) {
+            for (int i = 0; i < images.size(); i++) {
+                ProductImage productImage = new ProductImage();
+                productImage.setProductId(product.getId());
+                productImage.setImageUrl(images.get(i));
+                productImage.setIsPrimary(i == 0 ? 1 : 0); // 第一张设为主图
+                productImage.setSortOrder(i);
+                productImageMapper.insert(productImage);
+            }
+        }
+
         return product;
     }
 
@@ -84,6 +98,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                     new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
             imgWrapper.eq("product_id", product.getId()).orderByAsc("sort_order");
             List<com.campus.trade.backend.domain.entity.ProductImage> images = productImageMapper.selectList(imgWrapper);
+            product.setImages(images); // 设置所有图片列表
             
             // 设置主图地址
             if (!images.isEmpty()) {
@@ -131,12 +146,26 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             throw new RuntimeException("无权修改此商品！");
         }
 
-        // 将DTO中的属性复制到实体中
+        // 1. 更新商品基本信息
         BeanUtils.copyProperties(productDTO, product);
-        // 显式设置 condition
         product.setCondition(productDTO.getCondition());
-        
         this.updateById(product);
+
+        // 2. 更新商品图片 (采用先删后增策略)
+        List<String> newImages = productDTO.getImages();
+        if (newImages != null) {
+            // 删除旧图片记录
+            productImageMapper.delete(new QueryWrapper<ProductImage>().eq("product_id", id));
+            // 插入新图片记录
+            for (int i = 0; i < newImages.size(); i++) {
+                ProductImage productImage = new ProductImage();
+                productImage.setProductId(id);
+                productImage.setImageUrl(newImages.get(i));
+                productImage.setIsPrimary(i == 0 ? 1 : 0);
+                productImage.setSortOrder(i);
+                productImageMapper.insert(productImage);
+            }
+        }
     }
 
     @Override
@@ -202,6 +231,23 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                     .eq("status", 1)
             );
             product.setFavoriteCount(favCount);
+
+            // 判断当前用户是否已收藏 (关键修复)
+            try {
+                Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+                if (principal instanceof UserDetailsImpl userDetails) {
+                    Long currentUserId = userDetails.getId();
+                    com.campus.trade.backend.domain.entity.Favorite favorite = favoriteMapper.selectOne(
+                        new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trade.backend.domain.entity.Favorite>()
+                            .eq("product_id", product.getId())
+                            .eq("user_id", currentUserId)
+                            .eq("status", 1)
+                    );
+                    product.setIsFavorited(favorite != null);
+                }
+            } catch (Exception e) {
+                product.setIsFavorited(false);
+            }
         }
         return products;
     }
@@ -229,5 +275,26 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             favoriteMapper.updateById(favorite);
             return newStatus;
         }
+    }
+
+    @Override
+    public List<Product> getMyProducts(Long userId) {
+        List<Product> products = this.list(new QueryWrapper<Product>()
+                .eq("seller_id", userId)
+                .orderByDesc("create_time"));
+        
+        for (Product product : products) {
+            QueryWrapper<ProductImage> imgWrapper = new QueryWrapper<>();
+            imgWrapper.eq("product_id", product.getId())
+                      .orderByDesc("is_primary")
+                      .last("limit 1");
+            ProductImage mainImg = productImageMapper.selectOne(imgWrapper);
+            if (mainImg != null) {
+                product.setImageUrl(mainImg.getImageUrl());
+            } else {
+                product.setImageUrl("https://picsum.photos/400/300?random=" + product.getId());
+            }
+        }
+        return products;
     }
 }

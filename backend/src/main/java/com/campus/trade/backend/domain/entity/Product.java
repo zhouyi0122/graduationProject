@@ -38,6 +38,9 @@ public class Product {
     @TableField(exist = false)
     private User seller;
 
+    @TableField(exist = false)
+    private java.util.List<ProductImage> images;
+
     private Integer views = 0;
 
     @TableField(exist = false)

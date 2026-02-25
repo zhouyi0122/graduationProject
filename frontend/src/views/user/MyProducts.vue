@@ -3,7 +3,7 @@
     <!-- Top Fixed Header -->
     <header class="sticky top-0 z-40 bg-white shadow-sm">
       <div class="container mx-auto px-2 py-2 flex items-center relative h-14">
-        <button @click="router.back()" class="absolute left-2 p-2 text-gray-600 hover:text-gray-900">
+        <button @click="router.push('/user')" class="absolute left-2 p-2 text-gray-600 hover:text-gray-900">
           <el-icon :size="20"><ArrowLeftBold /></el-icon>
         </button>
         <h1 class="text-lg font-semibold text-gray-800 text-center w-full">我的发布</h1>
@@ -77,14 +77,14 @@
           <el-tab-pane label="草稿箱" name="drafts">
              <div v-if="draftProducts.length > 0" class="space-y-4">
               <div v-for="product in draftProducts" :key="product.id" class="bg-white rounded-lg shadow-sm p-3 flex space-x-3">
-                <img :src="product.imageUrl" :alt="product.title" class="w-24 h-24 rounded-md object-cover flex-shrink-0" />
+                <img :src="product.imageUrls && !product.imageUrls.split(',')[0].startsWith('blob:') ? product.imageUrls.split(',')[0] : 'https://picsum.photos/200/200?random=' + product.id" :alt="product.title" class="w-24 h-24 rounded-md object-cover flex-shrink-0" />
                 <div class="flex flex-col justify-between flex-grow min-w-0">
                     <div>
-                        <p class="text-sm text-gray-800 line-clamp-2">{{ product.title }}</p>
+                        <p class="text-sm text-gray-800 line-clamp-2 font-semibold">{{ product.title || '无标题草稿' }}</p>
                         <p class="text-lg font-bold text-red-500 mt-1">¥{{ product.price }}</p>
                     </div>
                     <div class="text-right">
-                        <el-button size="small" type="primary" @click.stop="editProduct(product.id)">继续编辑</el-button>
+                        <el-button size="small" type="primary" @click.stop="editProduct(product.id, true)">继续编辑</el-button>
                         <el-button size="small" type="danger" plain @click.stop="handleDelete(product.id, true)">删除</el-button>
                     </div>
                 </div>
@@ -118,8 +118,13 @@ const draftProducts = computed(() => userStore.drafts);
 const loadMyProducts = async () => {
   loading.value = true;
   try {
-    await userStore.fetchMyProducts();
+    // 同时拉取正式商品和草稿
+    await Promise.all([
+      userStore.fetchMyProducts(),
+      userStore.fetchDrafts()
+    ]);
   } catch (error) {
+    console.error('加载列表失败:', error);
     ElMessage.error('加载列表失败');
   } finally {
     loading.value = false;
@@ -137,8 +142,13 @@ const viewProductDetail = (productId) => {
     router.push(`/product/${productId}`);
 }
 
-const editProduct = (productId) => {
-    router.push(`/product/edit/${productId}`);
+const editProduct = (id, isDraft = false) => {
+    if (isDraft) {
+        // 跳转到发布页并带上草稿 ID
+        router.push({ path: '/products/new', query: { draftId: id } });
+    } else {
+        router.push(`/product/edit/${id}`);
+    }
 }
 
 const handleUpdateStatus = (productId, status, actionText) => {
@@ -167,12 +177,14 @@ const handleDelete = (productId, isDraft = false) => {
     .then(async () => {
         try {
           if (isDraft) {
-            userStore.deleteProduct(productId, true);
+            // 调用后端真实删除接口
+            await userStore.deleteProductDraft(productId);
           } else {
             await userStore.deleteMyProduct(productId);
           }
           ElMessage.success('已删除');
         } catch (error) {
+          console.error('删除失败:', error);
           ElMessage.error('删除失败');
         }
     }).catch(() => {});

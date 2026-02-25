@@ -21,6 +21,8 @@ public class ProductImage {
 
     private Integer isPrimary = 0; // 0:否, 1:是
 
+    private Integer sortOrder;
+
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 }

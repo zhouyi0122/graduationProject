@@ -33,8 +33,8 @@ public class OrderController {
             return ResponseEntity.badRequest().body(result.getAllErrors().get(0).getDefaultMessage());
         }
         try {
-            Order createdOrder = orderService.createOrder(createOrderRequest);
-            return ResponseEntity.ok(createdOrder);
+        Order createdOrder = orderService.createOrder(createOrderRequest);
+        return ResponseEntity.ok(createdOrder);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

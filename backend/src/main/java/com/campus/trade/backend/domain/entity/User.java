@@ -39,6 +39,8 @@ public class User {
     @TableField("is_certified")
     private Integer isCertified = 0; // 0:未认证, 1:已认证
 
+    private Long lastReadNotificationId = 0L;
+
     private java.math.BigDecimal balance = java.math.BigDecimal.ZERO;
 
     @TableField(value = "create_time", fill = FieldFill.INSERT)

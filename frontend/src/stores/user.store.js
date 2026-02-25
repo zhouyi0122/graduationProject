@@ -36,6 +36,7 @@ export const useUserStore = defineStore('user', {
     conversations: [],
     supportConversations: [],
     notifications: [],
+    unreadNotificationsCount: 0,
     soldOrders: [],
     boughtOrders: [],
     allUsers: [],
@@ -143,8 +144,12 @@ export const useUserStore = defineStore('user', {
     async fetchConversations() {
       try {
         const response = await apiClient.get('/chat/conversations');
-        this.conversations = response.data;
-        return response.data;
+        // 映射字段，确保 unreadCount 是数字类型
+        this.conversations = response.data.map(conv => ({
+          ...conv,
+          unreadCount: Number(conv.unreadCount) || 0
+        }));
+        return this.conversations;
       } catch (error) {
         console.error('获取会话列表失败:', error);
         throw error;
@@ -202,11 +207,20 @@ export const useUserStore = defineStore('user', {
     async fetchNotifications() {
       try {
         const response = await apiClient.get('/users/notifications');
-        this.notifications = response.data;
+        this.notifications = response.data.list;
+        this.unreadNotificationsCount = response.data.unreadCount;
         return response.data;
       } catch (error) {
         console.error('获取通知失败:', error);
         throw error;
+      }
+    },
+    async markNotificationsAsRead() {
+      try {
+        await apiClient.put('/users/notifications/read');
+        this.unreadNotificationsCount = 0;
+      } catch (error) {
+        console.error('标记通知已读失败:', error);
       }
     },
     // --- 我的发布管理 Actions ---
@@ -263,6 +277,51 @@ export const useUserStore = defineStore('user', {
         throw error;
       }
     },
+    // --- 草稿管理 Actions ---
+    async fetchDrafts() {
+      try {
+        const response = await apiClient.get('/products/drafts');
+        this.drafts = response.data;
+        return response.data;
+      } catch (error) {
+        console.error('获取草稿列表失败:', error);
+        throw error;
+      }
+    },
+    async saveProductDraft(draftData) {
+      try {
+        // 过滤掉 blob URL，只保留正式的服务器 URL
+        const filteredImages = Array.isArray(draftData.images) 
+          ? draftData.images.filter(url => url && !url.startsWith('blob:'))
+          : [];
+
+        const payload = {
+          id: draftData.id || null,
+          title: draftData.title || '',
+          description: draftData.description || '',
+          price: draftData.price || 0,
+          condition: draftData.condition || '',
+          categoryId: draftData.categoryId || 1,
+          imageUrls: filteredImages.join(',')
+        };
+        
+        const response = await apiClient.post('/products/drafts', payload);
+        await this.fetchDrafts(); // 刷新列表
+        return response.data;
+      } catch (error) {
+        console.error('保存草稿失败:', error);
+        throw error;
+      }
+    },
+    async deleteProductDraft(draftId) {
+      try {
+        await apiClient.delete(`/products/drafts/${draftId}`);
+        this.drafts = this.drafts.filter(d => d.id !== draftId);
+      } catch (error) {
+        console.error('删除草稿失败:', error);
+        throw error;
+      }
+    },
     async certifyCampus(certificationData) {
       try {
         await apiClient.post('/users/certify', certificationData);
@@ -280,11 +339,16 @@ export const useUserStore = defineStore('user', {
         throw error;
       }
     },
-    markConversationAsRead(conversationId) {
-        const conversation = this.allConversations.find(c => c.id === conversationId);
+    async markConversationAsRead(conversationId) {
+      try {
+        await apiClient.put(`/chat/conversations/${conversationId}/read`);
+        const conversation = this.conversations.find(c => String(c.id) === String(conversationId));
         if (conversation) {
-            conversation.unreadCount = 0;
+          conversation.unreadCount = 0;
         }
+      } catch (error) {
+        console.error('标记已读失败:', error);
+      }
     }
   },
 });

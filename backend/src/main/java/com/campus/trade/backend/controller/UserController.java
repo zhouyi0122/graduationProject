@@ -156,10 +156,48 @@ public class UserController {
     @GetMapping("/notifications")
     public ResponseEntity<?> getNotifications() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (!(principal instanceof UserDetailsImpl)) {
+        if (!(principal instanceof UserDetailsImpl userDetails)) {
             return ResponseEntity.status(401).body("未登录");
         }
-        return ResponseEntity.ok(new com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper<>(
-                notificationMapper).orderByDesc(Notification::getCreateTime).list());
+        
+        List<Notification> notifications = new com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper<>(
+                notificationMapper).orderByDesc(Notification::getId).list();
+        
+        // 获取用户最后阅读的通知ID
+        User user = userService.getById(userDetails.getId());
+        Long lastReadId = user.getLastReadNotificationId() != null ? user.getLastReadNotificationId() : 0L;
+        
+        // 统计未读数
+        long unreadCount = notifications.stream().filter(n -> n.getId() > lastReadId).count();
+        
+        return ResponseEntity.ok(Map.of(
+            "list", notifications,
+            "unreadCount", unreadCount
+        ));
+    }
+
+    /**
+     * 标记所有系统通知为已读
+     */
+    @PutMapping("/notifications/read")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public ResponseEntity<?> markNotificationsAsRead() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (!(principal instanceof UserDetailsImpl userDetails)) {
+            return ResponseEntity.status(401).body("未登录");
+        }
+
+        // 获取最新一条通知的ID
+        Notification latest = new com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper<>(
+                notificationMapper).orderByDesc(Notification::getId).last("limit 1").one();
+        
+        if (latest != null) {
+            User user = new User();
+            user.setId(userDetails.getId());
+            user.setLastReadNotificationId(latest.getId());
+            userService.updateById(user);
+        }
+
+        return ResponseEntity.ok(Map.of("message", "已标记为已读"));
     }
 }

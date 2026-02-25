@@ -19,10 +19,13 @@
                 <el-form-item label="第一张图片将作为商品封面">
                   <el-upload
                     v-model:file-list="fileList"
-                    action="#"
+                    :action="uploadUrl"
+                    :headers="uploadHeaders"
                     list-type="picture-card"
-                    :auto-upload="false"
                     :on-preview="handlePictureCardPreview"
+                    :on-success="handleUploadSuccess"
+                    :on-error="handleUploadError"
+                    multiple
                   >
                     <el-icon><Plus /></el-icon>
                   </el-upload>
@@ -104,6 +107,7 @@ const productStore = useProductStore();
 
 const loading = ref(false);
 const isEditMode = computed(() => !!route.params.id);
+const draftId = computed(() => route.query.draftId); // 新增：识别草稿 ID
 let isNavigating = false;
 
 const form = reactive({
@@ -118,26 +122,61 @@ const fileList = ref([]);
 const dialogImageUrl = ref('');
 const dialogVisible = ref(false);
 
+const uploadUrl = 'http://localhost:8080/api/upload';
+const uploadHeaders = computed(() => {
+  const user = JSON.parse(localStorage.getItem('user'));
+  return user && user.token ? { Authorization: 'Bearer ' + user.token } : {};
+});
+
 const fetchProductData = async () => {
-  if (!isEditMode.value) return;
-  
-  loading.value = true;
-  try {
-    const data = await productStore.fetchProductById(route.params.id);
-    form.title = data.title;
-    form.description = data.description;
-    form.price = data.price;
-    form.condition = data.condition;
-    form.categoryId = data.categoryId || 1;
-    
-    if (data.imageUrl) {
-      fileList.value = [{ url: data.imageUrl, name: 'current_image' }];
+  // 优先级：正式商品编辑 > 草稿继续编辑
+  if (isEditMode.value) {
+    loading.value = true;
+    try {
+      const data = await productStore.fetchProductById(route.params.id);
+      form.title = data.title;
+      form.description = data.description;
+      form.price = data.price;
+      form.condition = data.condition;
+      form.categoryId = data.categoryId || 1;
+      
+      // 修改：从 images 列表回显多张图片
+      if (data.images && data.images.length > 0) {
+        fileList.value = data.images.map(img => ({
+          url: img.imageUrl,
+          name: img.imageUrl.substring(img.imageUrl.lastIndexOf('/') + 1)
+        }));
+      } else if (data.imageUrl) {
+        fileList.value = [{ url: data.imageUrl, name: 'current_image' }];
+      }
+    } catch (error) {
+      console.error('获取商品详情失败:', error);
+      ElMessage.error('无法加载商品数据');
+    } finally {
+      loading.value = false;
     }
-  } catch (error) {
-    console.error('获取商品详情失败:', error);
-    ElMessage.error('无法加载商品数据');
-  } finally {
-    loading.value = false;
+  } else if (draftId.value) {
+    // 处理草稿回显
+    loading.value = true;
+    try {
+      // 从 store 中寻找当前草稿（或直接从后端获取，这里先假设 store 已有）
+      if (userStore.drafts.length === 0) await userStore.fetchDrafts();
+      const draft = userStore.drafts.find(d => String(d.id) === String(draftId.value));
+      if (draft) {
+        form.title = draft.title || '';
+        form.description = draft.description || '';
+        form.price = draft.price || 0;
+        form.condition = draft.condition || '';
+        form.categoryId = draft.categoryId || 1;
+        if (draft.imageUrls) {
+          fileList.value = draft.imageUrls.split(',').filter(url => url).map(url => ({ url }));
+        }
+      }
+    } catch (error) {
+      ElMessage.error('加载草稿失败');
+    } finally {
+      loading.value = false;
+    }
   }
 };
 
@@ -154,16 +193,30 @@ const handlePictureCardPreview = (uploadFile) => {
   dialogVisible.value = true;
 };
 
-const handleSaveDraft = () => {
+const handleSaveDraft = async () => {
     if (isFormEmpty.value) {
         ElMessage.warning('草稿内容不能为空！');
         return;
     }
-    const draftData = { ...form, images: fileList.value.map(f => f.url) };
-    userStore.saveDraft(draftData);
-    ElMessage.success('草稿已保存！');
-    isNavigating = true;
-    router.push('/user/products?tab=drafts');
+    try {
+        const images = fileList.value.map(f => f.response?.url || f.url).filter(url => url && !url.startsWith('blob:'));
+        const draftData = { 
+            ...form, 
+            images: images
+        };
+        // 如果是从已有草稿进入的，带上草稿 ID 以便后端更新
+        if (draftId.value) {
+            draftData.id = draftId.value;
+        }
+        
+        await userStore.saveProductDraft(draftData);
+        ElMessage.success('草稿已保存到云端！');
+        isNavigating = true;
+        router.push('/user/products?tab=drafts');
+    } catch (error) {
+        console.error('保存草稿失败:', error);
+        ElMessage.error('保存草稿失败，请稍后再试');
+    }
 }
 
 const handleSubmit = async () => {
@@ -176,20 +229,22 @@ const handleSubmit = async () => {
   try {
     const productData = { 
       ...form, 
-      images: fileList.value.map(f => f.url || f.response?.url) 
+      images: fileList.value.map(f => f.response?.url || f.url).filter(url => url && !url.startsWith('blob:')) 
     };
     
     if (isEditMode.value) {
       await apiClient.put(`/products/${route.params.id}`, productData);
       ElMessage.success('商品更新成功！');
+      isNavigating = true;
+      router.back(); // 编辑成功返回上一页
     } else {
       await apiClient.post('/products', productData);
       ElMessage.success('商品发布成功！');
+      isNavigating = true;
+      router.push('/user/products'); // 发布成功跳转到我的发布
     }
     
-    isNavigating = true;
     await productStore.fetchProducts();
-    router.push('/user/products');
   } catch (error) {
     console.error('操作失败:', error);
     ElMessage.error(isEditMode.value ? '更新失败' : '发布失败');

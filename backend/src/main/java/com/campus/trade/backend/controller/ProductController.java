@@ -2,6 +2,8 @@ package com.campus.trade.backend.controller;
 
 import com.campus.trade.backend.domain.dto.ProductDTO;
 import com.campus.trade.backend.domain.entity.Product;
+import com.campus.trade.backend.domain.entity.ProductDraft;
+import com.campus.trade.backend.mapper.ProductDraftMapper;
 import com.campus.trade.backend.service.ProductService;
 import com.campus.trade.backend.security.services.UserDetailsImpl;
 import jakarta.validation.Valid;
@@ -25,6 +27,21 @@ public class ProductController {
 
     @Autowired
     private ProductService productService;
+
+    @Autowired
+    private ProductDraftMapper productDraftMapper;
+
+    @Autowired
+    private com.campus.trade.backend.mapper.ProductCommentMapper productCommentMapper;
+
+    @Autowired
+    private com.campus.trade.backend.mapper.ProductCommentReplyMapper productCommentReplyMapper;
+
+    @Autowired
+    private com.campus.trade.backend.mapper.FavoriteMapper favoriteMapper;
+
+    @Autowired
+    private com.campus.trade.backend.service.UserService userService;
 
     /**
      * 发布新商品
@@ -84,9 +101,9 @@ public class ProductController {
             return ResponseEntity.status(401).build();
         }
         Long userId = userDetails.getId();
-        List<Product> products = productService.list(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Product>()
-                .eq("seller_id", userId)
-                .orderByDesc("create_time"));
+        
+        // 调用服务层获取包含图片信息的商品列表
+        List<Product> products = productService.getMyProducts(userId);
         return ResponseEntity.ok(products);
     }
 
@@ -157,18 +174,6 @@ public class ProductController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-
-    @Autowired
-    private com.campus.trade.backend.mapper.ProductCommentMapper productCommentMapper;
-
-    @Autowired
-    private com.campus.trade.backend.mapper.ProductCommentReplyMapper productCommentReplyMapper;
-
-    @Autowired
-    private com.campus.trade.backend.mapper.FavoriteMapper favoriteMapper;
-
-    @Autowired
-    private com.campus.trade.backend.service.UserService userService;
 
     /**
      * 获取商品留言列表及其回复
@@ -302,5 +307,93 @@ public class ProductController {
 
         return ResponseEntity.ok(Map.of("message", "回复成功", "replyId", reply.getId()));
     }
-}
 
+    // --- 草稿管理接口 ---
+
+    /**
+     * 获取当前用户的草稿列表
+     */
+    @GetMapping("/drafts")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public ResponseEntity<?> getDrafts() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (!(principal instanceof UserDetailsImpl userDetails)) {
+            return ResponseEntity.status(401).body("未登录");
+        }
+        List<ProductDraft> drafts = productDraftMapper.selectList(
+            new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ProductDraft>()
+                .eq("user_id", userDetails.getId())
+                .orderByDesc("create_time")
+        );
+        return ResponseEntity.ok(drafts);
+    }
+
+    /**
+     * 保存或更新草稿
+     */
+    @PostMapping("/drafts")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public ResponseEntity<?> saveDraft(@RequestBody Map<String, Object> request) {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (!(principal instanceof UserDetailsImpl userDetails)) {
+            return ResponseEntity.status(401).body("未登录");
+        }
+        
+        ProductDraft draft = new ProductDraft();
+        if (request.get("id") != null) {
+            draft.setId(Long.valueOf(request.get("id").toString()));
+        }
+        draft.setTitle((String) request.get("title"));
+        draft.setDescription((String) request.get("description"));
+        if (request.get("price") != null) {
+            draft.setPrice(new java.math.BigDecimal(request.get("price").toString()));
+        }
+        draft.setCondition((String) request.get("condition"));
+        if (request.get("categoryId") != null) {
+            draft.setCategoryId(Integer.valueOf(request.get("categoryId").toString()));
+        }
+
+        // 优先处理 images 数组（前端传来的新格式），其次处理 imageUrls 字符串
+        Object imagesObj = request.get("images");
+        String finalImageUrls = "";
+        if (imagesObj instanceof java.util.List) {
+            java.util.List<String> images = (java.util.List<String>) imagesObj;
+            finalImageUrls = images.stream()
+                .filter(url -> url != null && !url.startsWith("blob:"))
+                .collect(java.util.stream.Collectors.joining(","));
+        } else if (request.get("imageUrls") != null) {
+            String imageUrlsStr = (String) request.get("imageUrls");
+            finalImageUrls = java.util.Arrays.stream(imageUrlsStr.split(","))
+                .filter(url -> url != null && !url.trim().isEmpty() && !url.startsWith("blob:"))
+                .collect(java.util.stream.Collectors.joining(","));
+        }
+        draft.setImageUrls(finalImageUrls);
+        
+        draft.setUserId(userDetails.getId());
+        if (draft.getId() == null) {
+            productDraftMapper.insert(draft);
+        } else {
+            productDraftMapper.updateById(draft);
+        }
+        return ResponseEntity.ok(draft);
+    }
+
+    /**
+     * 删除草稿
+     */
+    @DeleteMapping("/drafts/{id}")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public ResponseEntity<?> deleteDraft(@PathVariable Long id) {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (!(principal instanceof UserDetailsImpl userDetails)) {
+            return ResponseEntity.status(401).body("未登录");
+        }
+        
+        ProductDraft draft = productDraftMapper.selectById(id);
+        if (draft != null && draft.getUserId().equals(userDetails.getId())) {
+            productDraftMapper.deleteById(id);
+            return ResponseEntity.ok(Map.of("message", "草稿删除成功"));
+        }
+        return ResponseEntity.status(403).body("无权删除此草稿");
+    }
+}
