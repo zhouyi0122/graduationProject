@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trade.backend.domain.dto.JwtResponse;
 import com.campus.trade.backend.domain.dto.LoginRequest;
+import com.campus.trade.backend.domain.entity.CampusCertification;
 import com.campus.trade.backend.domain.entity.User;
+import com.campus.trade.backend.mapper.CampusCertificationMapper;
 import com.campus.trade.backend.mapper.UserMapper;
 import com.campus.trade.backend.security.services.UserDetailsImpl;
 import com.campus.trade.backend.service.UserService;
@@ -35,6 +37,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Autowired
     private JwtUtils jwtUtils;
 
+    @Autowired
+    private CampusCertificationMapper campusCertificationMapper;
+
     /**
      * 用户注册
      * @param user 包含用户名和原始密码的用户对象
@@ -57,7 +62,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 设置默认值
         user.setRole(0); // 默认为普通用户
         user.setStatus(0); // 默认为正常状态
-        user.setIsCertified(0); // 默认为未认证
+        user.setCertificationStatus(0); // 默认为未认证
 
         // 插入用户数据
         userMapper.insert(user);
@@ -125,12 +130,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public void certifyUser(Long userId) {
+    public void submitCampusCertification(Long userId, String school, String studentId, String realName) {
         User user = this.getById(userId);
-        if (user != null) {
-            user.setIsCertified(1); // 设置为已认证
-            this.updateById(user);
+        if (user == null) {
+            throw new RuntimeException("用户不存在");
         }
+        if (user.getCertificationStatus() != null && user.getCertificationStatus() == 1) {
+            throw new RuntimeException("您已有认证申请在审核中");
+        }
+
+        CampusCertification certification = new CampusCertification();
+        certification.setUserId(userId);
+        certification.setSchool(school);
+        certification.setStudentId(studentId);
+        certification.setRealName(realName);
+        certification.setStatus(0);
+        campusCertificationMapper.insert(certification);
+
+        user.setCertificationStatus(1); // 审核中
+        this.updateById(user);
     }
 
     @Override

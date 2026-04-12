@@ -49,10 +49,21 @@
         <div class="flex items-center justify-between py-3">
           <span>校园认证</span>
           <div class="flex items-center">
-            <span v-if="userStore.profile.isCertified" class="text-green-500 flex items-center">
-                <el-icon class="mr-1"><SuccessFilled /></el-icon> 已认证
+            <span v-if="userStore.profile.certificationStatus === 2" class="text-green-500 flex items-center">
+              <el-icon class="mr-1"><SuccessFilled /></el-icon> 已认证
             </span>
-            <el-button v-else @click="certificationDialogVisible = true" type="primary" plain size="small">去认证</el-button>
+            <span v-else-if="userStore.profile.certificationStatus === 1" class="text-orange-500">审核中</span>
+            <span v-else-if="userStore.profile.certificationStatus === 3" class="text-red-500">已驳回</span>
+            <el-button
+              v-if="userStore.profile.certificationStatus !== 1 && userStore.profile.certificationStatus !== 2"
+              @click="certificationDialogVisible = true"
+              type="primary"
+              plain
+              size="small"
+              class="ml-2"
+            >
+              去认证
+            </el-button>
           </div>
         </div>
       </el-card>
@@ -113,6 +124,9 @@
 
     <el-dialog v-model="certificationDialogVisible" title="校园认证" width="90%">
         <el-form :model="certificationForm" label-position="top">
+            <el-form-item label="学校">
+                <el-input v-model="certificationForm.school" placeholder="请输入学校名称" />
+            </el-form-item>
             <el-form-item label="学号/教工号">
                 <el-input v-model="certificationForm.studentId" placeholder="请输入学号/教工号" />
             </el-form-item>
@@ -158,6 +172,7 @@ const passwordForm = reactive({
 });
 
 const certificationForm = reactive({
+    school: '',
     studentId: '',
     realName: '',
 });
@@ -308,16 +323,19 @@ const changePassword = async () => {
 }
 
 const submitCertification = async () => {
-    if (!certificationForm.studentId || !certificationForm.realName) {
+    if (!certificationForm.school || !certificationForm.studentId || !certificationForm.realName) {
         ElMessage.warning('请填写完整的认证信息');
         return;
     }
     try {
         await userStore.certifyCampus(certificationForm);
-        ElMessage.success('认证成功');
+        ElMessage.success('认证申请已提交，请等待审核');
         certificationDialogVisible.value = false;
+        certificationForm.school = '';
+        certificationForm.studentId = '';
+        certificationForm.realName = '';
     } catch (error) {
-        ElMessage.error('认证失败，请稍后再试');
+        ElMessage.error(error.response?.data || '提交失败，请稍后再试');
     }
 }
 

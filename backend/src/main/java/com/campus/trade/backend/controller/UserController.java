@@ -90,17 +90,26 @@ public class UserController {
     }
 
     /**
-     * 校园认证
+     * 提交校园认证申请
      */
     @PostMapping("/certify")
     @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
-    public ResponseEntity<?> certify() {
+    public ResponseEntity<?> certify(@RequestBody Map<String, String> request) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (!(principal instanceof UserDetailsImpl userDetails)) {
             return ResponseEntity.status(401).body("未登录");
         }
-        userService.certifyUser(userDetails.getId());
-        return ResponseEntity.ok(Map.of("message", "认证成功"));
+
+        String school = request.get("school");
+        String studentId = request.get("studentId");
+        String realName = request.get("realName");
+
+        if (school == null || school.trim().isEmpty() || studentId == null || studentId.trim().isEmpty() || realName == null || realName.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("学校、学号/教工号、真实姓名不能为空");
+        }
+
+        userService.submitCampusCertification(userDetails.getId(), school.trim(), studentId.trim(), realName.trim());
+        return ResponseEntity.ok(Map.of("message", "认证申请已提交，等待审核"));
     }
 
     /**

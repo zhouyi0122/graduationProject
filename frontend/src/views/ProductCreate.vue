@@ -52,9 +52,9 @@
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <label class="el-form-item__label" style="margin-bottom: 0;">商品描述</label>
-                        <button type="button" class="flex items-center text-sm bg-orange-100 text-orange-600 font-semibold px-2 py-1 rounded-md transition-colors hover:bg-orange-200">
+                        <button type="button" @click="handleAiGenerate" :disabled="aiLoading" class="flex items-center text-sm bg-orange-100 text-orange-600 font-semibold px-2 py-1 rounded-md transition-colors hover:bg-orange-200 disabled:opacity-60 disabled:cursor-not-allowed">
                             <el-icon class="mr-1" :size="16"><MagicStick /></el-icon>
-                            AI帮你写
+                            {{ aiLoading ? 'AI生成中...' : 'AI帮你写' }}
                         </button>
                     </div>
                     <el-input
@@ -73,6 +73,14 @@
                 <el-form-item label="商品售价 (元)">
                   <el-input-number v-model="form.price" :precision="2" :step="1" :min="0" size="large" class="w-full"></el-input-number>
                 </el-form-item>
+                <el-alert
+                  v-if="aiSuggestion.reason"
+                  :title="`AI建议价：${aiSuggestion.suggestedPrice || 0} 元（区间 ${aiSuggestion.priceMin || 0} ~ ${aiSuggestion.priceMax || 0}）`"
+                  :description="aiSuggestion.reason"
+                  type="info"
+                  :closable="false"
+                  show-icon
+                />
             </div>
 
             <div class="pt-4 flex space-x-4">
@@ -106,9 +114,17 @@ const userStore = useUserStore();
 const productStore = useProductStore();
 
 const loading = ref(false);
+const aiLoading = ref(false);
 const isEditMode = computed(() => !!route.params.id);
 const draftId = computed(() => route.query.draftId); // 新增：识别草稿 ID
 let isNavigating = false;
+
+const aiSuggestion = reactive({
+  priceMin: 0,
+  priceMax: 0,
+  suggestedPrice: 0,
+  reason: '',
+});
 
 const form = reactive({
   title: '',
@@ -218,6 +234,53 @@ const handleSaveDraft = async () => {
         ElMessage.error('保存草稿失败，请稍后再试');
     }
 }
+
+const handleAiGenerate = async () => {
+  const imageUrls = fileList.value.map(f => f.response?.url || f.url).filter(url => !!url && !url.startsWith('blob:'));
+  if (imageUrls.length === 0) {
+    ElMessage.warning('请先上传至少一张商品图片再使用AI');
+    return;
+  }
+
+  aiLoading.value = true;
+  try {
+    const response = await apiClient.post('/ai/product-assistant', {
+      title: form.title,
+      condition: form.condition,
+      imageUrls,
+    });
+
+    const data = response.data || {};
+    const hasManualTitle = !!form.title;
+    const hasManualCondition = !!form.condition;
+
+    if (!hasManualTitle && data.title) {
+      form.title = data.title;
+    }
+    if (!hasManualCondition && data.condition) {
+      form.condition = data.condition;
+    }
+    if (data.description) {
+      form.description = data.description;
+    }
+
+    aiSuggestion.priceMin = Number(data.priceMin || 0);
+    aiSuggestion.priceMax = Number(data.priceMax || 0);
+    aiSuggestion.suggestedPrice = Number(data.suggestedPrice || 0);
+    aiSuggestion.reason = data.reason || '';
+
+    if (aiSuggestion.suggestedPrice > 0) {
+      form.price = aiSuggestion.suggestedPrice;
+    }
+
+    ElMessage.success('AI生成完成，已保留您的手动输入，仅补全其余字段');
+  } catch (error) {
+    console.error('AI生成失败:', error);
+    ElMessage.error(error.response?.data || 'AI生成失败，请稍后再试');
+  } finally {
+    aiLoading.value = false;
+  }
+};
 
 const handleSubmit = async () => {
   if (!form.title || !form.price || !form.condition || (fileList.value.length === 0 && !isEditMode.value)) {

@@ -41,6 +41,9 @@ public class Product {
     @TableField(exist = false)
     private java.util.List<ProductImage> images;
 
+    @TableField(exist = false)
+    private Integer aiReviewStatus; // 0:待人工审核, 1:人工通过, 2:人工下架, null:未审核
+
     private Integer views = 0;
 
     @TableField(exist = false)

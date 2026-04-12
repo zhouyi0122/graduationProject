@@ -14,7 +14,7 @@ export const useUserStore = defineStore('user', {
       nickname: '',
       email: '',
       phone: '',
-      isCertified: false,
+      certificationStatus: 0,
       bio: '',
       gender: '保密',
       avatarUrl: '',
@@ -43,6 +43,7 @@ export const useUserStore = defineStore('user', {
     allProducts: [],
     transactions: [],
     allOrders: [],
+    certificationApplications: [],
   }),
   getters: {
     allConversations: (state) => [...state.conversations, ...state.supportConversations],
@@ -111,6 +112,38 @@ export const useUserStore = defineStore('user', {
         return response.data;
       } catch (error) {
         console.error('切换用户状态失败:', error);
+        throw error;
+      }
+    },
+    async fetchCertificationApplications(status) {
+      try {
+        const params = {};
+        if (status !== undefined && status !== null && status !== '') {
+          params.status = status;
+        }
+        const response = await apiClient.get('/admin/certifications', { params });
+        this.certificationApplications = response.data;
+        return response.data;
+      } catch (error) {
+        console.error('获取认证申请列表失败:', error);
+        throw error;
+      }
+    },
+    async approveCertification(applicationId) {
+      try {
+        const response = await apiClient.put(`/admin/certifications/${applicationId}/approve`);
+        return response.data;
+      } catch (error) {
+        console.error('审核通过失败:', error);
+        throw error;
+      }
+    },
+    async rejectCertification(applicationId, remark) {
+      try {
+        const response = await apiClient.put(`/admin/certifications/${applicationId}/reject`, { remark });
+        return response.data;
+      } catch (error) {
+        console.error('驳回审核失败:', error);
         throw error;
       }
     },

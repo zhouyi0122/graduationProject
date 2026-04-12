@@ -3,7 +3,8 @@ import apiClient from '../services/api';
 
 export const useProductStore = defineStore('products', {
   state: () => ({
-    products: [], 
+    products: [],
+    aiReviews: [],
     categories: [
         { id: 1, name: '电子产品', href: '#' },
         { id: 2, name: '学习书籍', href: '#' },
@@ -38,9 +39,11 @@ export const useProductStore = defineStore('products', {
       }
     },
     // 管理员：获取所有商品列表
-    async fetchAllAdminProducts() {
+    async fetchAllAdminProducts(status) {
       try {
-        const response = await apiClient.get('/admin/products');
+        const response = await apiClient.get('/admin/products', {
+          params: { status }
+        });
         this.products = response.data;
         return response.data;
       } catch (error) {
@@ -60,6 +63,45 @@ export const useProductStore = defineStore('products', {
         return response.data;
       } catch (error) {
         console.error('切换商品状态失败:', error);
+        throw error;
+      }
+    },
+    async fetchProductAiReviews(status) {
+      try {
+        const response = await apiClient.get('/admin/products/ai-reviews', {
+          params: { status }
+        });
+        this.aiReviews = response.data;
+        return response.data;
+      } catch (error) {
+        console.error('获取AI审核列表失败:', error);
+        throw error;
+      }
+    },
+    async runProductAiReview(productId) {
+      try {
+        const response = await apiClient.post(`/admin/products/${productId}/ai-review`);
+        return response.data;
+      } catch (error) {
+        console.error('触发AI审核失败:', error);
+        throw error;
+      }
+    },
+    async approveProductAiReview(reviewId) {
+      try {
+        const response = await apiClient.put(`/admin/products/ai-reviews/${reviewId}/approve`);
+        return response.data;
+      } catch (error) {
+        console.error('人工通过失败:', error);
+        throw error;
+      }
+    },
+    async offShelfProductByAiReview(reviewId) {
+      try {
+        const response = await apiClient.put(`/admin/products/ai-reviews/${reviewId}/off-shelf`);
+        return response.data;
+      } catch (error) {
+        console.error('人工下架失败:', error);
         throw error;
       }
     },

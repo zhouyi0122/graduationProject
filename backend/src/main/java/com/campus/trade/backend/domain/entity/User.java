@@ -36,8 +36,8 @@ public class User {
 
     private Integer role = 0; // 0:普通用户, 1:管理员
 
-    @TableField("is_certified")
-    private Integer isCertified = 0; // 0:未认证, 1:已认证
+    @TableField("certification_status")
+    private Integer certificationStatus = 0; // 0:未认证, 1:审核中, 2:已认证, 3:已驳回
 
     private Long lastReadNotificationId = 0L;
 

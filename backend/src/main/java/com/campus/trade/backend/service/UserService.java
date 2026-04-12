@@ -27,10 +27,13 @@ public interface UserService extends IService<User> {
     void updateProfile(User user);
 
     /**
-     * 校园认证
+     * 提交校园认证申请
      * @param userId 用户ID
+     * @param school 学校
+     * @param studentId 学号/教工号
+     * @param realName 真实姓名
      */
-    void certifyUser(Long userId);
+    void submitCampusCertification(Long userId, String school, String studentId, String realName);
 
     /**
      * 修改密码
